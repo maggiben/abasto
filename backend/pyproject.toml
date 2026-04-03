@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "abasto-api"
+version = "0.1.0"
+description = "Abasto ERP API"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "python-jose[cryptography]>=3.3",
+    "bcrypt>=4.2",
+    "email-validator>=2.2",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+# USB thermal printing: raw pyusb only (same idea as repo print.py). See receipt_printer._print_raw_usb.
+printer = ["pyusb>=1.2"]
+# Optional: python-escpos (same idea as easy.py) for profile/cut helpers; still uses libusb underneath.
+printer_escpos = [
+    "python-escpos>=3.0",
+    "pyusb>=1.2",
+]
+dev = [
+    "httpx>=0.27",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

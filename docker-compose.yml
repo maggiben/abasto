@@ -1,0 +1,71 @@
+# Browsers call the API on the host (not the Docker service name). Defaults assume
+# published ports localhost:3000 (web) and localhost:8000 (api). For LAN access,
+# rebuild web with e.g. NEXT_PUBLIC_API_URL=http://192.168.1.10:8000 and set
+# CORS_ORIGINS on the api service to include your web origin.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: abasto-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: abasto
+      POSTGRES_PASSWORD: abasto
+      POSTGRES_DB: abasto
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U abasto -d abasto"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: abasto-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    # Linux / Pi only: exposes the host USB device nodes so libusb/pyusb can scan the bus.
+    # There is no "0483:070b path" here — the app finds the printer via PRINTER_USB_* below.
+    # Docker Desktop on macOS: /dev/bus/usb usually does not exist on the Mac host and USB
+    # passthrough is unreliable — run `uvicorn` on the Mac for printing, or deploy API on Linux.
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    environment:
+      DATABASE_URL: postgresql+asyncpg://abasto:abasto@postgres:5432/abasto
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-use-a-long-random-secret}
+      DEBUG: "false"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      PRINTER_ENABLED: "true"
+      PRINTER_USB_VENDOR: "0x0483"
+      PRINTER_USB_PRODUCT: "0x070B"
+      PRINTER_PROFILE: "XP-58"
+      PRINTER_PREFER_ESCPOS: "true"
+      RECEIPT_STORE_NAME: "ABASTO"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: abasto-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

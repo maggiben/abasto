@@ -1,0 +1,72 @@
+{
+  "meta": {
+    "title": "Abasto"
+  },
+  "home": {
+    "title": "Abasto",
+    "pos": "Punto de venta",
+    "admin": "Administración",
+    "hint": "Interfaces pensadas para teclado y comercio local."
+  },
+  "login": {
+    "title": "Ingresar",
+    "email": "Correo",
+    "password": "Contraseña",
+    "submit": "Continuar",
+    "error": "No se pudo iniciar sesión",
+    "staffRequired": "Se requiere acceso de personal para administración."
+  },
+  "pos": {
+    "search": "Escanear o buscar",
+    "dry": "Solo precio",
+    "cart": "Carrito",
+    "qty": "Cant",
+    "price": "Precio",
+    "total": "Total",
+    "subtotal": "Subtotal",
+    "tax": "Impuesto",
+    "pay": "Cobrar",
+    "empty": "Sin ítems",
+    "checkoutOk": "Venta #{id}",
+    "checkoutErr": "Error al cobrar",
+    "priceCheck": "Consulta de precio",
+    "calc": "Calculadora",
+    "help": "F2 solo precio · F4 cobrar · flechas carrito · +/- cant · Supr quitar · Esc limpiar",
+    "logout": "Salir"
+  },
+  "admin": {
+    "navHome": "Inicio",
+    "navProducts": "Productos",
+    "navInventory": "Inventario",
+    "title": "Administración",
+    "summary": "Resumen (30 días)",
+    "revenuePos": "Ventas POS",
+    "revenueWeb": "Ventas web",
+    "inventoryValue": "Valor inventario",
+    "posSales": "Ventas POS",
+    "products": "Productos",
+    "search": "Buscar",
+    "export": "Exportar CSV",
+    "import": "Importar CSV",
+    "newProduct": "Nuevo producto",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "name": "Nombre",
+    "barcode": "Código",
+    "price": "Precio",
+    "cost": "Costo",
+    "stock": "Stock",
+    "active": "Activo",
+    "actions": "Acciones",
+    "edit": "Editar",
+    "deactivate": "Desactivar",
+    "importResult": "Importado: {created} nuevos, {updated} actualizados",
+    "inventoryTitle": "Inventario",
+    "inventoryHint": "Indique existencias y umbral opcional de stock mínimo. Cada fila se guarda por separado para reducir escrituras al servidor.",
+    "inventoryQuantity": "Cantidad en stock",
+    "lowStockThreshold": "Umbral de stock bajo",
+    "inventoryQtyRequired": "La cantidad es obligatoria",
+    "inventorySaved": "Inventario actualizado",
+    "logout": "Cerrar sesión"
+  }
+}

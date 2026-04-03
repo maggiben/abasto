@@ -1,0 +1,72 @@
+{
+  "meta": {
+    "title": "Abasto"
+  },
+  "home": {
+    "title": "Abasto",
+    "pos": "Point of sale",
+    "admin": "Administration",
+    "hint": "Keyboard-first interfaces for local retail."
+  },
+  "login": {
+    "title": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Continue",
+    "error": "Sign-in failed",
+    "staffRequired": "Staff access required for admin."
+  },
+  "pos": {
+    "search": "Scan or search",
+    "dry": "Dry",
+    "cart": "Cart",
+    "qty": "Qty",
+    "price": "Price",
+    "total": "Total",
+    "subtotal": "Subtotal",
+    "tax": "Tax",
+    "pay": "Pay",
+    "empty": "No items",
+    "checkoutOk": "Sale #{id}",
+    "checkoutErr": "Checkout failed",
+    "priceCheck": "Price check",
+    "calc": "Calculator",
+    "help": "F2 dry · F4 pay · arrows cart · +/- qty · Del remove · Esc clear",
+    "logout": "Exit"
+  },
+  "admin": {
+    "navHome": "Home",
+    "navProducts": "Products",
+    "navInventory": "Inventory",
+    "title": "Admin",
+    "summary": "Summary (30 days)",
+    "revenuePos": "POS revenue",
+    "revenueWeb": "Web revenue",
+    "inventoryValue": "Inventory value",
+    "posSales": "POS sales",
+    "products": "Products",
+    "search": "Search",
+    "export": "Export CSV",
+    "import": "Import CSV",
+    "newProduct": "New product",
+    "save": "Save",
+    "cancel": "Cancel",
+    "name": "Name",
+    "barcode": "Barcode",
+    "price": "Price",
+    "cost": "Cost",
+    "stock": "Stock",
+    "active": "Active",
+    "actions": "Actions",
+    "edit": "Edit",
+    "deactivate": "Deactivate",
+    "importResult": "Imported: {created} created, {updated} updated",
+    "inventoryTitle": "Inventory",
+    "inventoryHint": "Set on-hand quantity and optional low-stock alert level. Changes are saved per row to limit server updates.",
+    "inventoryQuantity": "Quantity on hand",
+    "lowStockThreshold": "Low stock threshold",
+    "inventoryQtyRequired": "Quantity is required",
+    "inventorySaved": "Inventory updated",
+    "logout": "Log out"
+  }
+}

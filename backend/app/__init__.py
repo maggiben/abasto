@@ -1,0 +1,1 @@
+"""Abasto ERP FastAPI application."""
