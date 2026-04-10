@@ -1,4 +1,15 @@
-# Abasto
+
+<div align="center">
+<br>
+<p align="center">
+<img src="docs/logo.webp" alt="Abasto" height="72" />
+</p>
+
+<p align="center">
+Abasto is a friendly ERP 🏬
+</p>
+</div>
+
 
 ![Abasto](docs/logo.webp)
 
