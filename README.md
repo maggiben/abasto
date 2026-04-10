@@ -10,9 +10,6 @@ Abasto is a friendly ERP 🏬
 </p>
 </div>
 
-
-![Abasto](docs/logo.webp)
-
 Abasto is a barebone ERP for small stores: a **Next.js** storefront and admin UI, a **FastAPI** backend, and **PostgreSQL**. Checkout can drive a **USB thermal receipt printer** (e.g. XP-58 class devices) when the API runs on a host with USB access.
 
 ---
