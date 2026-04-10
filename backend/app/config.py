@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     printer_enabled: bool = False
     printer_usb_vendor: int = 0x0483
     printer_usb_product: int = 0x070B
-    printer_profile: str = "XP-58"
+    # python-escpos capability profile name (see escpos capabilities.json), not the hardware model.
+    printer_profile: str = "default"
     printer_prefer_escpos: bool = False
     receipt_store_name: str = "ABASTO"
 

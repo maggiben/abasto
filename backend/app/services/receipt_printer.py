@@ -28,7 +28,8 @@ def build_receipt_text(
     ts = checkout.created_at
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
-    dt = ts.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    local_dt = ts.astimezone()
+    dt = local_dt.strftime("%Y-%m-%d %H:%M")
     lines_out: list[str] = [
         store_name.center(32)[:32],
         f"Sale #{checkout.sale_id}".center(32),
@@ -99,6 +100,17 @@ def _print_raw_usb(vendor: int, product: int, payload: bytes) -> None:
     usb.util.dispose_resources(dev)
 
 
+def _resolve_escpos_profile(name: str) -> str:
+    """Use a name from escpos capabilities; unknown names (e.g. hardware labels) fall back."""
+    from escpos.capabilities import CAPABILITIES  # type: ignore[import-untyped]
+
+    profiles = CAPABILITIES.get("profiles") or {}
+    if name in profiles:
+        return name
+    logger.debug("ESC/POS profile %r not in capabilities; using default", name)
+    return "default"
+
+
 def _print_escpos_usb(
     vendor: int,
     product: int,
@@ -107,7 +119,7 @@ def _print_escpos_usb(
 ) -> None:
     from escpos.printer import Usb  # type: ignore[import-untyped]
 
-    p = Usb(vendor, product, 0, profile=profile)
+    p = Usb(vendor, product, 0, profile=_resolve_escpos_profile(profile))
     try:
         p.set(align="left", font="a", bold=False, width=1, height=1)
         for line in text.splitlines():
