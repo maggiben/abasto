@@ -39,3 +39,4 @@ def test_openapi_includes_auth() -> None:
     assert "/admin/inventory/alerts/expiring" in paths
     assert "/admin/inventory/alerts/notify-low-stock" in paths
     assert "/admin/audit-logs/export" in paths
+    assert "/admin/users/{user_id}/promote" in paths

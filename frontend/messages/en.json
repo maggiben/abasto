@@ -31,6 +31,7 @@
     "checkoutErr": "Checkout failed",
     "priceCheck": "Price check",
     "calc": "Calculator",
+    "remove": "Delete",
     "help": "F2 dry · F4 pay · arrows cart · +/- qty · Del remove · Esc clear",
     "logout": "Exit"
   },

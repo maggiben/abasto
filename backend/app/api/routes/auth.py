@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_user_optional
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.session import get_session
 from app.models.user import User
@@ -17,7 +17,13 @@ router = APIRouter()
 async def register(
     body: UserCreate,
     session: Annotated[AsyncSession, Depends(get_session)],
+    actor: Annotated[User | None, Depends(get_current_user_optional)],
 ) -> User:
+    if body.is_staff and (actor is None or not actor.is_staff):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only staff can create staff users",
+        )
     result = await session.execute(select(User).where(User.email == body.email))
     if result.scalar_one_or_none() is not None:
         raise HTTPException(
@@ -27,6 +33,7 @@ async def register(
     user = User(
         email=body.email,
         hashed_password=hash_password(body.password),
+        is_staff=body.is_staff,
     )
     session.add(user)
     await session.commit()

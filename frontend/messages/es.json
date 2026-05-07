@@ -31,6 +31,7 @@
     "checkoutErr": "Error al cobrar",
     "priceCheck": "Consulta de precio",
     "calc": "Calculadora",
+    "remove": "Eliminar",
     "help": "F2 solo precio · F4 cobrar · flechas carrito · +/- cant · Supr quitar · Esc limpiar",
     "logout": "Salir"
   },

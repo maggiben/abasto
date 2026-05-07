@@ -8,6 +8,7 @@ from app.api.routes import (
     admin_orders,
     admin_products,
     admin_sales,
+    admin_users,
     admin_vendor_orders,
     auth,
     catalog,
@@ -32,3 +33,4 @@ api_router.include_router(admin_vendor_orders.router, prefix="/admin/vendor-orde
 api_router.include_router(admin_audit.router, prefix="/admin/audit-logs", tags=["admin-audit"])
 api_router.include_router(admin_analytics.router, prefix="/admin/analytics", tags=["admin-analytics"])
 api_router.include_router(admin_notifications.router, prefix="/admin/notifications", tags=["admin-notifications"])
+api_router.include_router(admin_users.router, prefix="/admin/users", tags=["admin-users"])

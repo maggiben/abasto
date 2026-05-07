@@ -13,6 +13,7 @@ import {
   createTheme,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAtom, useSetAtom } from "jotai";
@@ -198,6 +199,14 @@ export function PosTerminal() {
     }
   }, [token, t, focusSearch]);
 
+  const removeLine = useCallback((index: number) => {
+    setLines((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      setSel((s) => Math.min(s, Math.max(0, next.length - 1)));
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const ae = document.activeElement as HTMLElement | null;
@@ -288,18 +297,14 @@ export function PosTerminal() {
       }
       if (cartKeys && e.key === "Delete") {
         e.preventDefault();
-        setLines((prev) => {
-          const next = prev.filter((_, i) => i !== si);
-          setSel((s) => Math.min(s, Math.max(0, next.length - 1)));
-          return next;
-        });
+        removeLine(si);
         return;
       }
     };
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [results, pick, resolveSearch, addProduct, checkout]);
+  }, [results, pick, resolveSearch, addProduct, checkout, removeLine]);
 
   useEffect(() => {
     focusSearch();
@@ -349,17 +354,14 @@ export function PosTerminal() {
         <Stack direction="row" alignItems="center" justifyContent="space-between">
           <Typography variant="h6">{t("search")}</Typography>
           <Stack direction="row" spacing={1} alignItems="center">
-            <Typography
-              sx={{
-                px: 1,
-                borderRadius: 1,
-                bgcolor: dry ? "success.dark" : "transparent",
-                border: "1px solid",
-                borderColor: "divider",
-              }}
+            <Button
+              size="small"
+              variant={dry ? "contained" : "outlined"}
+              color={dry ? "success" : "inherit"}
+              onClick={() => setDry((d) => !d)}
             >
-              {t("dry")}
-            </Typography>
+              {t("dry")} (F2)
+            </Button>
             <Button
               size="small"
               color="inherit"
@@ -456,6 +458,16 @@ export function PosTerminal() {
                   <Typography sx={{ minWidth: 100 }}>
                     {formatMoney(parseNum(ln.quantity) * parseNum(ln.unitPrice))}
                   </Typography>
+                  <IconButton
+                    aria-label={t("remove")}
+                    color="error"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeLine(i);
+                    }}
+                  >
+                    <DeleteOutlineIcon />
+                  </IconButton>
                 </Stack>
               ))}
             </Stack>

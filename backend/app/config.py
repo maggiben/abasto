@@ -6,6 +6,7 @@ from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_CORS_CSV = "http://localhost:3000,http://127.0.0.1:3000"
+_DEFAULT_CORS_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 
 class Settings(BaseSettings):
@@ -24,12 +25,18 @@ class Settings(BaseSettings):
         default=_DEFAULT_CORS_CSV,
         validation_alias=AliasChoices("CORS_ORIGINS", "cors_origins"),
     )
+    cors_origin_regex: str = Field(
+        default=_DEFAULT_CORS_ORIGIN_REGEX,
+        validation_alias=AliasChoices("CORS_ORIGIN_REGEX", "cors_origin_regex"),
+    )
 
     database_url: str = "postgresql+asyncpg://abasto:abasto@localhost:5432/abasto"
 
     jwt_secret: str = "change-me-in-production-use-long-random-string"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24
+    bootstrap_admin_email: str | None = None
+    bootstrap_admin_password: str | None = None
 
     # Applied when checkout request does not override tax_rate_percent (e.g. 10 means 10%).
     default_tax_rate_percent: Decimal = Decimal("0")

@@ -85,6 +85,10 @@ export function Providers({
   locale: string;
   messages: Record<string, unknown>;
 }) {
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
   return (
     <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
       <JotaiProvider>
