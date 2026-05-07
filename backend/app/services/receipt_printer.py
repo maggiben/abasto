@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import getpass
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -79,25 +80,65 @@ def _get_usb_out_endpoint(dev: object):
 
 
 def _print_raw_usb(vendor: int, product: int, payload: bytes) -> None:
+    """
+    Raw USB write for ESC/POS printers (PyUSB).
+
+    On Linux, if ``usblp`` / CUPS has claimed interface 0, ``detach_kernel_driver(0)``
+    is required before userspace I/O (PyUSB docs). We use interface 0 consistently with
+    ``_get_usb_out_endpoint`` (``cfg[(0, 0)]``). After printing, ``attach_kernel_driver(0)``
+    restores the kernel driver so the device is not left detached until unplug.
+    """
     import usb.core  # type: ignore[import-untyped]
     import usb.util  # type: ignore[import-untyped]
 
     dev = usb.core.find(idVendor=vendor, idProduct=product)
     if dev is None:
         raise RuntimeError(f"USB printer not found (vid={vendor:#06x} pid={product:#06x})")
-    if dev.is_kernel_driver_active(0):
+
+    # bInterfaceNumber 0 — typical single-interface thermal printer; must match endpoint lookup.
+    interface = 0
+    kernel_detached = False
+    try:
+        active = False
         try:
-            dev.detach_kernel_driver(0)
-        except usb.core.USBError:
-            pass
-    dev.set_configuration()
-    ep = _get_usb_out_endpoint(dev)
-    # Init + payload + partial cut (same tail as root print.py)
-    data = b"\x1b\x40" + payload + b"\n\x1d\x56\x00"
-    written = dev.write(ep.bEndpointAddress, data, timeout=5_000)
-    if written != len(data):
-        logger.warning("USB write short write: %s vs %s", written, len(data))
-    usb.util.dispose_resources(dev)
+            active = bool(dev.is_kernel_driver_active(interface))
+        except NotImplementedError:
+            logger.debug("USB is_kernel_driver_active not implemented for this backend")
+        except usb.core.USBError as e:
+            logger.debug("USB is_kernel_driver_active: %s", e)
+
+        if active:
+            try:
+                dev.detach_kernel_driver(interface)
+                kernel_detached = True
+            except usb.core.USBError as e:
+                logger.warning(
+                    "USB detach_kernel_driver(%s) failed (CUPS/usblp may hold the device): %s",
+                    interface,
+                    e,
+                )
+
+        dev.set_configuration()
+        ep = _get_usb_out_endpoint(dev)
+        # Init + payload + partial cut (same tail as root print.py)
+        data = b"\x1b\x40" + payload + b"\n\x1d\x56\x00"
+        written = dev.write(ep.bEndpointAddress, data, timeout=5_000)
+        if written != len(data):
+            logger.warning("USB write short write: %s vs %s", written, len(data))
+    finally:
+        try:
+            usb.util.dispose_resources(dev)
+        except Exception:
+            logger.debug("USB dispose_resources failed", exc_info=True)
+        if kernel_detached:
+            try:
+                dev.attach_kernel_driver(interface)
+            except usb.core.USBError as e:
+                logger.warning(
+                    "USB attach_kernel_driver(%s) failed (CUPS/usblp may need replug): %s",
+                    interface,
+                    e,
+                )
 
 
 def _resolve_escpos_profile(name: str) -> str:
@@ -146,27 +187,50 @@ def try_print_receipt(
     raw pyusb write (like repo print.py).
     """
     if not force and not settings.printer_enabled:
+        logger.info(
+            "Receipt print skipped: PRINTER_ENABLED is false (sale_id=%s). "
+            "Set PRINTER_ENABLED=true in the API process environment.",
+            checkout.sale_id,
+        )
         return
     text = build_receipt_text(
         store_name=settings.receipt_store_name,
         checkout=checkout,
         cashier_email=cashier_email,
     )
+    payload = text.encode("utf-8", errors="replace")
     vid = settings.printer_usb_vendor
     pid = settings.printer_usb_product
     try:
+        logger.info(
+            "Receipt print starting: sale_id=%s os_user=%s vid=%#06x pid=%#06x "
+            "prefer_escpos=%s profile=%r payload_bytes=%s",
+            checkout.sale_id,
+            getpass.getuser(),
+            vid,
+            pid,
+            settings.printer_prefer_escpos,
+            settings.printer_profile,
+            len(payload),
+        )
         if settings.printer_prefer_escpos:
             try:
                 _print_escpos_usb(vid, pid, settings.printer_profile, text)
+                logger.info(
+                    "Receipt print finished OK (ESC/POS USB) sale_id=%s",
+                    checkout.sale_id,
+                )
                 return
             except ImportError:
                 logger.info("python-escpos not installed; falling back to raw USB print")
             except Exception:
                 logger.exception("ESC/POS print failed; trying raw USB")
-        _print_raw_usb(
+        _print_raw_usb(vid, pid, payload)
+        logger.info("Receipt print finished OK (raw USB) sale_id=%s", checkout.sale_id)
+    except Exception:
+        logger.exception(
+            "Receipt print failed (sale persisted) sale_id=%s vid=%#06x pid=%#06x",
+            checkout.sale_id,
             vid,
             pid,
-            text.encode("utf-8", errors="replace"),
         )
-    except Exception:
-        logger.exception("Receipt print failed (sale persisted)")
