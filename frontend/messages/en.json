@@ -66,6 +66,7 @@
     "printThermal": "Print to thermal printer",
     "printThermalOk": "Label sent to printer",
     "actionsMenu": "Actions menu",
+    "barcodePreviewError": "Could not render barcode preview",
     "price": "Price",
     "cost": "Cost",
     "stock": "Stock",

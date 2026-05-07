@@ -66,6 +66,7 @@
     "printThermal": "Imprimir en térmica",
     "printThermalOk": "Etiqueta enviada a la impresora",
     "actionsMenu": "Menú de acciones",
+    "barcodePreviewError": "No se pudo mostrar la vista previa del código de barras",
     "price": "Precio",
     "cost": "Costo",
     "stock": "Stock",

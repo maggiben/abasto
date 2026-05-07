@@ -13,7 +13,8 @@ import {
   Typography,
 } from "@mui/material";
 import JsBarcode from "jsbarcode";
-import { useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
 export type ProductLabelDialogProps = {
   open: boolean;
@@ -40,27 +41,71 @@ export function ProductLabelDialog({
   cancelLabel,
   printThermalLabel,
 }: ProductLabelDialogProps) {
-  const svgRef = useRef<SVGSVGElement | null>(null);
+  const t = useTranslations("admin");
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [encodeErr, setEncodeErr] = useState<string | null>(null);
 
-  useEffect(() => {
-    const el = svgRef.current;
-    if (!open || !el) return;
+  const drawBarcode = useCallback(() => {
+    const canvas = canvasRef.current;
     const code = barcode.trim();
-    if (!code) return;
+    if (!canvas || !code) return;
+
     try {
-      el.replaceChildren();
-      JsBarcode(el, code, {
+      setEncodeErr(null);
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+
+      JsBarcode(canvas, code, {
         format: "CODE128",
         width: 2,
-        height: 72,
+        height: 80,
         displayValue: true,
-        fontSize: 16,
+        fontSize: 14,
         margin: 12,
       });
-    } catch {
-      /* invalid pattern for encoder */
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setEncodeErr(msg || t("barcodePreviewError"));
     }
-  }, [open, barcode]);
+  }, [barcode, t]);
+
+  useLayoutEffect(() => {
+    if (!open || !barcode.trim()) {
+      setEncodeErr(null);
+      return;
+    }
+
+    let cancelled = false;
+    const safeDraw = () => {
+      if (!cancelled) drawBarcode();
+    };
+
+    let rafOuter = 0;
+    let rafInner = 0;
+    rafOuter = requestAnimationFrame(() => {
+      rafInner = requestAnimationFrame(safeDraw);
+    });
+
+    const timerFallback = window.setTimeout(safeDraw, 400);
+
+    const wrap = wrapRef.current;
+    let ro: ResizeObserver | undefined;
+    if (wrap && typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => safeDraw());
+      ro.observe(wrap);
+    }
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafOuter);
+      cancelAnimationFrame(rafInner);
+      window.clearTimeout(timerFallback);
+      ro?.disconnect();
+    };
+  }, [open, barcode, drawBarcode]);
 
   return (
     <Dialog
@@ -78,9 +123,31 @@ export function ProductLabelDialog({
           <Typography variant="body1" sx={{ fontWeight: 600, wordBreak: "break-word" }}>
             {productName.trim() || "—"}
           </Typography>
-          <Box sx={{ display: "flex", justifyContent: "center", py: 1, overflow: "auto" }}>
-            <svg ref={svgRef} />
+          <Typography variant="body2" color="text.secondary" sx={{ fontFamily: "monospace" }}>
+            {barcode.trim() || "—"}
+          </Typography>
+          <Box
+            ref={wrapRef}
+            sx={{
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+              py: 1,
+              overflow: "auto",
+              minHeight: 120,
+              alignItems: "center",
+            }}
+          >
+            <canvas
+              ref={canvasRef}
+              style={{ maxWidth: "100%", height: "auto", verticalAlign: "middle" }}
+            />
           </Box>
+          {encodeErr && (
+            <Alert severity="warning">
+              {t("barcodePreviewError")}: {encodeErr}
+            </Alert>
+          )}
           {error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
