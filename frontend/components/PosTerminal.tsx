@@ -90,7 +90,7 @@ export function PosTerminal() {
     for (const ln of lines) {
       sub += parseNum(ln.quantity) * parseNum(ln.unitPrice);
     }
-    return { subtotal: sub, tax: 21, total: sub };
+    return { subtotal: sub, tax: process.env.NEXT_PUBLIC_POS_TAX_PERCENT?.trim() ??0, total: sub };
   }, [lines]);
 
   const focusSearch = useCallback(() => {
