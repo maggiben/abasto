@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
@@ -5,18 +6,27 @@ from fastapi.responses import Response
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_current_staff_user
+from app.config import get_settings
 from app.db.session import AsyncSessionLocal
 from app.db.session import get_session
 from app.models.product import InventoryItem, Product
 from app.models.user import User
 from app.schemas.csv_import import ProductCsvImportResult, ProductCsvImportStart, ProductCsvImportStatus
-from app.schemas.product import ProductCreate, ProductPublic, ProductUpdate, ProductWithInventory
+from app.schemas.product import (
+    PrintLabelBody,
+    ProductCreate,
+    ProductPublic,
+    ProductUpdate,
+    ProductWithInventory,
+)
 from app.services.barcode_allocation import allocate_unique_barcode
 from app.services.audit_service import record as audit_record
 from app.services.product_csv import ParsedProductRow, format_export_filename, parse_import_csv, products_to_csv_bytes
 from app.services.product_import import apply_import_rows, validate_import_rows
+from app.services.receipt_printer import print_product_label_usb
 from app.services.product_import_jobs import (
     add_job_progress,
     complete_job,
@@ -28,6 +38,7 @@ from app.services.product_import_jobs import (
 
 router = APIRouter()
 IMPORT_BATCH_SIZE = 1000
+logger = logging.getLogger(__name__)
 
 
 async def _run_import_job(job_id: str, rows: list[ParsedProductRow], actor_user_id: int) -> None:
@@ -202,6 +213,50 @@ async def get_import_csv_status(
         updated=job.updated,
         errors=job.errors,
     )
+
+
+@router.post("/print-label", status_code=status.HTTP_204_NO_CONTENT)
+async def print_product_label_route(
+    body: PrintLabelBody,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    staff: Annotated[User, Depends(get_current_staff_user)],
+) -> Response:
+    settings = get_settings()
+    if not settings.printer_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Thermal printer is disabled (set PRINTER_ENABLED=true on the API server)",
+        )
+    try:
+        await run_in_threadpool(
+            print_product_label_usb,
+            settings.printer_usb_vendor,
+            settings.printer_usb_product,
+            body.name,
+            body.barcode,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Label print failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Label print failed",
+        ) from exc
+
+    await audit_record(
+        session,
+        actor_user_id=staff.id,
+        action="product.print_label",
+        entity_type="product",
+        entity_id=None,
+        payload={"barcode": body.barcode},
+    )
+    await session.commit()
+    return Response(status_code=204)
 
 
 @router.post("", response_model=ProductWithInventory, status_code=status.HTTP_201_CREATED)

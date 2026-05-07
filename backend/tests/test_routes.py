@@ -24,6 +24,7 @@ def test_openapi_includes_auth() -> None:
     assert "/admin/inventory/products/{product_id}" in paths
     assert "/admin/products/export" in paths
     assert "/admin/products/import" in paths
+    assert "/admin/products/print-label" in paths
     assert "/pos/checkout" in paths
     assert "/orders" in paths
     assert "/orders/me" in paths

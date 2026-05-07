@@ -64,6 +64,52 @@ def _ascii_safe(s: str) -> str:
     return s.encode("ascii", "replace").decode("ascii")
 
 
+def _wrap_label_lines(name: str, width: int = 32) -> list[str]:
+    safe = _ascii_safe(name)
+    if not safe:
+        return [""]
+    lines: list[str] = []
+    while safe:
+        lines.append(safe[:width])
+        safe = safe[width:]
+    return lines
+
+
+def build_product_label_escpos_payload(name: str, barcode_value: str) -> bytes:
+    """
+    ESC/POS bytes for a centered product name, then CODE128 (same GS k sequence as repo code128.py).
+    Barcode data must be ASCII.
+    """
+    data = barcode_value.encode("ascii")
+    if len(data) + 2 > 255:
+        raise ValueError("Barcode too long for printer command")
+
+    parts: list[bytes] = [
+        b"\x1b\x61\x01",  # center align
+    ]
+    for line in _wrap_label_lines(name, 32):
+        parts.append(line.encode("ascii") + b"\n")
+
+    parts.extend(
+        [
+            b"\x1b\x61\x01",
+            b"\x1d\x68\x64",  # bar code height
+            b"\x1d\x77\x02",  # width
+            b"\x1d\x48\x02",  # HRI below
+            # CODE128 mode 73; {B selects subset B
+            b"\x1d\x6b\x49" + bytes([len(data) + 2]) + b"{B" + data,
+            b"\n\n\n",
+        ],
+    )
+    return b"".join(parts)
+
+
+def print_product_label_usb(vendor: int, usb_product: int, name: str, barcode_value: str) -> None:
+    """Send a product label to the thermal printer (blocking I/O)."""
+    payload = build_product_label_escpos_payload(name, barcode_value)
+    _print_raw_usb(vendor, usb_product, payload)
+
+
 def _get_usb_out_endpoint(dev: object):
     import usb.util  # type: ignore[import-untyped]
 

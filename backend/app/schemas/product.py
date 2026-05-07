@@ -124,3 +124,23 @@ class PriceCheckResponse(BaseModel):
 
 class ProductWithInventory(ProductPublic):
     inventory: InventoryPublic | None
+
+
+class PrintLabelBody(BaseModel):
+    """Print a product label on the USB thermal printer (server-side)."""
+
+    name: str = Field(min_length=1, max_length=500)
+    barcode: str = Field(min_length=1, max_length=128)
+
+    @field_validator("barcode", mode="before")
+    @classmethod
+    def strip_barcode_print(cls, v: object) -> str:
+        if isinstance(v, str):
+            return v.strip()
+        return str(v)
+
+    @field_validator("barcode")
+    @classmethod
+    def barcode_format_print(cls, v: str) -> str:
+        validate_barcode_format(v)
+        return v

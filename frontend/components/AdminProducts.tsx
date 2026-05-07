@@ -12,6 +12,10 @@ import {
   FormControlLabel,
   IconButton,
   LinearProgress,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Stack,
   Table,
   TableBody,
@@ -23,6 +27,7 @@ import {
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditIcon from "@mui/icons-material/Edit";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PrintIcon from "@mui/icons-material/Print";
 import { useTranslations } from "next-intl";
 import { useAtom } from "jotai";
@@ -31,7 +36,8 @@ import { Controller, useForm } from "react-hook-form";
 import { apiFetch, ApiError, getApiBase } from "@/lib/api";
 import { authTokenAtom } from "@/lib/atoms";
 import { formatMoney } from "@/lib/format";
-import { isValidManualBarcode, printProductLabel } from "@/lib/printProductLabel";
+import { isValidManualBarcode } from "@/lib/printProductLabel";
+import { ProductLabelDialog } from "@/components/ProductLabelDialog";
 import type {
   ProductBulkDeactivateResult,
   ProductCsvImportStart,
@@ -78,6 +84,12 @@ export function AdminProducts() {
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ProductWithInventory | null>(null);
+  const [rowMenu, setRowMenu] = useState<{ anchor: HTMLElement; row: ProductWithInventory } | null>(
+    null,
+  );
+  const [labelDialog, setLabelDialog] = useState<{ name: string; barcode: string } | null>(null);
+  const [labelPrinting, setLabelPrinting] = useState(false);
+  const [labelErr, setLabelErr] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const importLastProcessedRef = useRef(0);
 
@@ -179,6 +191,33 @@ export function AdminProducts() {
       is_fractional: p.is_fractional,
     });
     setOpen(true);
+  }
+
+  function openLabelPreview(name: string, barcode: string) {
+    setLabelErr(null);
+    setLabelDialog({ name, barcode });
+  }
+
+  async function sendThermalPrint() {
+    if (!token || !labelDialog) return;
+    setLabelErr(null);
+    setLabelPrinting(true);
+    try {
+      await apiFetch<void>("/admin/products/print-label", {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          name: labelDialog.name.trim(),
+          barcode: labelDialog.barcode.trim(),
+        }),
+      });
+      setMsg(t("printThermalOk"));
+      setLabelDialog(null);
+    } catch (e) {
+      setLabelErr(e instanceof ApiError ? e.message : "—");
+    } finally {
+      setLabelPrinting(false);
+    }
   }
 
   const onSave = handleSubmit(async (values) => {
@@ -422,37 +461,77 @@ export function AdminProducts() {
                 </TableCell>
                 <TableCell align="center">{p.is_active ? "✓" : "—"}</TableCell>
                 <TableCell align="right">
-                  {p.barcode ? (
-                    <IconButton
-                      aria-label={t("printLabel")}
-                      size="small"
-                      onClick={() => {
-                        const ok = printProductLabel(p.name, p.barcode!);
-                        if (!ok) setErr(t("printPopupBlocked"));
-                      }}
-                    >
-                      <PrintIcon fontSize="small" />
-                    </IconButton>
-                  ) : null}
                   <IconButton
-                    aria-label={t("edit")}
+                    aria-label={t("actionsMenu")}
                     size="small"
-                    onClick={() => openEdit(p)}
+                    onClick={(e) => setRowMenu({ anchor: e.currentTarget, row: p })}
                   >
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton
-                    aria-label={t("deactivate")}
-                    size="small"
-                    onClick={() => void deactivate(p)}
-                  >
-                    <DeleteOutlineIcon fontSize="small" />
+                    <MoreVertIcon fontSize="small" />
                   </IconButton>
                 </TableCell>
               </TableRow>
             ))}
         </TableBody>
       </Table>
+
+      <Menu
+        anchorEl={rowMenu?.anchor ?? null}
+        open={Boolean(rowMenu)}
+        onClose={() => setRowMenu(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <MenuItem
+          disabled={!rowMenu?.row.barcode}
+          onClick={() => {
+            const r = rowMenu?.row;
+            setRowMenu(null);
+            if (r?.barcode) openLabelPreview(r.name, r.barcode);
+          }}
+        >
+          <ListItemIcon>
+            <PrintIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{t("printLabel")}</ListItemText>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            const r = rowMenu?.row;
+            setRowMenu(null);
+            if (r) openEdit(r);
+          }}
+        >
+          <ListItemIcon>
+            <EditIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{t("edit")}</ListItemText>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            const r = rowMenu?.row;
+            setRowMenu(null);
+            if (r) void deactivate(r);
+          }}
+        >
+          <ListItemIcon>
+            <DeleteOutlineIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{t("deactivate")}</ListItemText>
+        </MenuItem>
+      </Menu>
+
+      <ProductLabelDialog
+        open={Boolean(labelDialog)}
+        onClose={() => setLabelDialog(null)}
+        productName={labelDialog?.name ?? ""}
+        barcode={labelDialog?.barcode ?? ""}
+        onPrintThermal={sendThermalPrint}
+        printing={labelPrinting}
+        error={labelErr}
+        title={t("labelPreviewTitle")}
+        cancelLabel={t("cancel")}
+        printThermalLabel={t("printThermal")}
+      />
 
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{editing ? t("edit") : t("newProduct")}</DialogTitle>
@@ -480,17 +559,15 @@ export function AdminProducts() {
                   type="button"
                   variant="outlined"
                   sx={{ flexShrink: 0, mt: { xs: 0, sm: 1 } }}
-                  startIcon={<PrintIcon />}
-                  disabled={!barcodeField?.trim()}
-                  onClick={() => {
-                    const ok = printProductLabel(
-                      nameField?.trim() || "—",
-                      barcodeField ?? "",
-                    );
-                    if (!ok) setErr(t("printPopupBlocked"));
-                  }}
+                  disabled={
+                    !barcodeField?.trim() ||
+                    !isValidManualBarcode(barcodeField ?? "")
+                  }
+                  onClick={() =>
+                    openLabelPreview(nameField?.trim() || "—", barcodeField ?? "")
+                  }
                 >
-                  {t("printLabel")}
+                  {t("previewLabel")}
                 </Button>
               </Stack>
               <Controller
