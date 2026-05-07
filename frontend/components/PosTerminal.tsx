@@ -171,7 +171,7 @@ export function PosTerminal() {
   const checkout = useCallback(async () => {
     if (!token || linesRef.current.length === 0) return;
     try {
-      const taxEnv = process.env.NEXT_PUBLIC_POS_TAX_PERCENT?.trim() ?? 21;
+      const taxEnv = process.env.NEXT_PUBLIC_POS_TAX_PERCENT?.trim() ?? 0;
       const payload: Record<string, unknown> = {
         lines: linesRef.current.map((l) => ({
           product_id: l.productId,
