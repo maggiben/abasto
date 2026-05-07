@@ -13,6 +13,7 @@ from app.models.product import InventoryItem, Product
 from app.models.user import User
 from app.schemas.csv_import import ProductCsvImportResult, ProductCsvImportStart, ProductCsvImportStatus
 from app.schemas.product import ProductCreate, ProductPublic, ProductUpdate, ProductWithInventory
+from app.services.barcode_allocation import allocate_unique_barcode
 from app.services.audit_service import record as audit_record
 from app.services.product_csv import ParsedProductRow, format_export_filename, parse_import_csv, products_to_csv_bytes
 from app.services.product_import import apply_import_rows, validate_import_rows
@@ -209,9 +210,12 @@ async def create_product(
     session: Annotated[AsyncSession, Depends(get_session)],
     staff: Annotated[User, Depends(get_current_staff_user)],
 ) -> Product:
-    if body.barcode:
+    barcode = body.barcode
+    if barcode is None:
+        barcode = await allocate_unique_barcode(session)
+    else:
         existing = await session.execute(
-            select(Product.id).where(Product.barcode == body.barcode),
+            select(Product.id).where(Product.barcode == barcode),
         )
         if existing.scalar_one_or_none() is not None:
             raise HTTPException(
@@ -228,7 +232,7 @@ async def create_product(
         price=body.price,
         cost=body.cost,
         margin_percent=body.margin_percent,
-        barcode=body.barcode,
+        barcode=barcode,
         weight_grams=body.weight_grams,
         expiration_date=body.expiration_date,
         image_url=body.image_url,

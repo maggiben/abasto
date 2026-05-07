@@ -1,7 +1,9 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.services.barcode_allocation import validate_barcode_format
 
 
 class ProductBase(BaseModel):
@@ -22,7 +24,23 @@ class ProductBase(BaseModel):
 
 
 class ProductCreate(ProductBase):
-    pass
+    @field_validator("barcode", mode="before")
+    @classmethod
+    def normalize_barcode(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            s = v.strip()
+            return s if s else None
+        return v
+
+    @field_validator("barcode")
+    @classmethod
+    def barcode_format(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        validate_barcode_format(v)
+        return v
 
 
 class ProductUpdate(BaseModel):
@@ -41,6 +59,24 @@ class ProductUpdate(BaseModel):
     image_url: str | None = Field(default=None, max_length=2048)
     is_fractional: bool | None = None
     is_active: bool | None = None
+
+    @field_validator("barcode", mode="before")
+    @classmethod
+    def normalize_barcode_update(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            s = v.strip()
+            return s if s else None
+        return v
+
+    @field_validator("barcode")
+    @classmethod
+    def barcode_format_update(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        validate_barcode_format(v)
+        return v
 
 
 class ProductPublic(ProductBase):

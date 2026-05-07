@@ -23,6 +23,7 @@ import {
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditIcon from "@mui/icons-material/Edit";
+import PrintIcon from "@mui/icons-material/Print";
 import { useTranslations } from "next-intl";
 import { useAtom } from "jotai";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -30,6 +31,7 @@ import { Controller, useForm } from "react-hook-form";
 import { apiFetch, ApiError, getApiBase } from "@/lib/api";
 import { authTokenAtom } from "@/lib/atoms";
 import { formatMoney } from "@/lib/format";
+import { isValidManualBarcode, printProductLabel } from "@/lib/printProductLabel";
 import type {
   ProductBulkDeactivateResult,
   ProductCsvImportStart,
@@ -79,9 +81,12 @@ export function AdminProducts() {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const importLastProcessedRef = useRef(0);
 
-  const { register, handleSubmit, reset, control, formState } = useForm<FormValues>({
+  const { register, handleSubmit, reset, control, formState, watch } = useForm<FormValues>({
     defaultValues: emptyForm,
   });
+
+  const barcodeField = watch("barcode");
+  const nameField = watch("name");
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -417,6 +422,18 @@ export function AdminProducts() {
                 </TableCell>
                 <TableCell align="center">{p.is_active ? "✓" : "—"}</TableCell>
                 <TableCell align="right">
+                  {p.barcode ? (
+                    <IconButton
+                      aria-label={t("printLabel")}
+                      size="small"
+                      onClick={() => {
+                        const ok = printProductLabel(p.name, p.barcode!);
+                        if (!ok) setErr(t("printPopupBlocked"));
+                      }}
+                    >
+                      <PrintIcon fontSize="small" />
+                    </IconButton>
+                  ) : null}
                   <IconButton
                     aria-label={t("edit")}
                     size="small"
@@ -449,7 +466,33 @@ export function AdminProducts() {
               <TextField label={t("categoryDetail")} {...register("category_detail")} />
               <TextField label={t("price")} required {...register("price", { required: true })} />
               <TextField label={t("cost")} {...register("cost")} />
-              <TextField label={t("barcode")} {...register("barcode")} />
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ xs: "stretch", sm: "flex-start" }}>
+                <TextField
+                  label={t("barcode")}
+                  fullWidth
+                  helperText={t("barcodeHint")}
+                  {...register("barcode", {
+                    validate: (v) =>
+                      isValidManualBarcode(v) ? true : t("barcodeInvalid"),
+                  })}
+                />
+                <Button
+                  type="button"
+                  variant="outlined"
+                  sx={{ flexShrink: 0, mt: { xs: 0, sm: 1 } }}
+                  startIcon={<PrintIcon />}
+                  disabled={!barcodeField?.trim()}
+                  onClick={() => {
+                    const ok = printProductLabel(
+                      nameField?.trim() || "—",
+                      barcodeField ?? "",
+                    );
+                    if (!ok) setErr(t("printPopupBlocked"));
+                  }}
+                >
+                  {t("printLabel")}
+                </Button>
+              </Stack>
               <Controller
                 name="is_fractional"
                 control={control}
