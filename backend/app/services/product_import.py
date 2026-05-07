@@ -1,3 +1,6 @@
+from collections.abc import Iterable
+from typing import TypeVar
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -5,36 +8,68 @@ from sqlalchemy.orm import selectinload
 from app.models.product import InventoryItem, Product
 from app.services.product_csv import ParsedProductRow
 
+T = TypeVar("T")
+
+
+def _chunks(values: Iterable[T], size: int = 1000) -> Iterable[list[T]]:
+    batch: list[T] = []
+    for value in values:
+        batch.append(value)
+        if len(batch) == size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
+
+async def _existing_ids(session: AsyncSession, ids: set[int]) -> set[int]:
+    found: set[int] = set()
+    for batch in _chunks(ids):
+        result = await session.execute(select(Product.id).where(Product.id.in_(batch)))
+        found.update(result.scalars().all())
+    return found
+
+
+async def _existing_by_barcode(session: AsyncSession, barcodes: set[str]) -> dict[str, int]:
+    found: dict[str, int] = {}
+    for batch in _chunks(barcodes):
+        result = await session.execute(
+            select(Product.barcode, Product.id).where(Product.barcode.in_(batch)),
+        )
+        for barcode, product_id in result.all():
+            if barcode is not None:
+                found[barcode] = product_id
+    return found
+
 
 async def validate_import_rows(session: AsyncSession, rows: list[ParsedProductRow]) -> list[str]:
-    """Database-level validation (call after CSV parse succeeds)."""
+    """Database-level validation and EAN/barcode resolution.
+
+    Product ids are internal database ids. Catalog imports normally do not know them, so a
+    row with an existing barcode is converted into an update before counts are calculated.
+    """
     errors: list[str] = []
+    ids = {r.id for r in rows if r.id is not None}
+    existing_ids = await _existing_ids(session, ids)
+    existing_by_barcode = await _existing_by_barcode(
+        session,
+        {r.barcode for r in rows if r.barcode},
+    )
+
     for r in rows:
         if r.id is not None:
-            result = await session.execute(select(Product.id).where(Product.id == r.id))
-            if result.scalar_one_or_none() is None:
+            if r.id not in existing_ids:
                 errors.append(f"Row {r.row_index}: product id {r.id} not found")
                 continue
             if r.barcode:
-                clash = await session.execute(
-                    select(Product.id).where(
-                        Product.barcode == r.barcode,
-                        Product.id != r.id,
-                    ),
-                )
-                if clash.scalar_one_or_none() is not None:
+                barcode_owner_id = existing_by_barcode.get(r.barcode)
+                if barcode_owner_id is not None and barcode_owner_id != r.id:
                     errors.append(
                         f"Row {r.row_index}: barcode {r.barcode!r} already used by another product",
                     )
         else:
-            if r.barcode:
-                clash = await session.execute(
-                    select(Product.id).where(Product.barcode == r.barcode),
-                )
-                if clash.scalar_one_or_none() is not None:
-                    errors.append(
-                        f"Row {r.row_index}: barcode {r.barcode!r} already exists",
-                    )
+            if r.barcode and (existing_id := existing_by_barcode.get(r.barcode)) is not None:
+                r.id = existing_id
     return errors
 
 
@@ -50,6 +85,10 @@ async def apply_import_rows(
             product = Product(
                 name=r.name,
                 description=r.description,
+                brand=r.brand,
+                category=r.category,
+                subcategory=r.subcategory,
+                category_detail=r.category_detail,
                 price=r.price,
                 cost=r.cost,
                 margin_percent=r.margin_percent,
@@ -80,6 +119,10 @@ async def apply_import_rows(
             p = result.scalar_one()
             p.name = r.name
             p.description = r.description
+            p.brand = r.brand
+            p.category = r.category
+            p.subcategory = r.subcategory
+            p.category_detail = r.category_detail
             p.price = r.price
             p.cost = r.cost
             p.margin_percent = r.margin_percent

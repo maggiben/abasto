@@ -5,7 +5,7 @@ from app.services.product_csv import CSV_COLUMNS, parse_import_csv, products_to_
 
 def test_parse_roundtrip_minimal() -> None:
     header = ",".join(CSV_COLUMNS)
-    row = "1,Test,,10.00,,,bc123,,,,false,true,5,"
+    row = "1,Test,,,,,,10.00,,,bc123,,,,false,true,5,"
     text = header + "\n" + row + "\n"
     rows, errors = parse_import_csv(text)
     assert errors == []
@@ -36,8 +36,11 @@ def test_parse_catalog_semicolon() -> None:
     assert r.id is None
     assert r.barcode == "4894947016844"
     assert r.name == "Celular tecno"
+    assert r.description is None
+    assert r.brand == "Tecno"
+    assert r.category == "Electro"
+    assert r.subcategory == "Celulares"
+    assert r.category_detail == "Libres"
     assert r.price == Decimal("0")
     assert r.quantity == Decimal("0")
     assert r.is_active is True
-    assert "Tecno" in (r.description or "")
-    assert "Celulares" in (r.description or "")

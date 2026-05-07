@@ -7,6 +7,10 @@ from pydantic import BaseModel, ConfigDict, Field
 class ProductBase(BaseModel):
     name: str = Field(min_length=1, max_length=500)
     description: str | None = None
+    brand: str | None = Field(default=None, max_length=255)
+    category: str | None = Field(default=None, max_length=255)
+    subcategory: str | None = Field(default=None, max_length=255)
+    category_detail: str | None = Field(default=None, max_length=255)
     price: Decimal = Field(ge=0)
     cost: Decimal | None = Field(default=None, ge=0)
     margin_percent: Decimal | None = Field(default=None, ge=0, le=100)
@@ -24,6 +28,10 @@ class ProductCreate(ProductBase):
 class ProductUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=500)
     description: str | None = None
+    brand: str | None = Field(default=None, max_length=255)
+    category: str | None = Field(default=None, max_length=255)
+    subcategory: str | None = Field(default=None, max_length=255)
+    category_detail: str | None = Field(default=None, max_length=255)
     price: Decimal | None = Field(default=None, ge=0)
     cost: Decimal | None = Field(default=None, ge=0)
     margin_percent: Decimal | None = Field(default=None, ge=0, le=100)

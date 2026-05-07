@@ -11,6 +11,7 @@ import {
   DialogTitle,
   FormControlLabel,
   IconButton,
+  LinearProgress,
   Stack,
   Table,
   TableBody,
@@ -24,15 +25,24 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditIcon from "@mui/icons-material/Edit";
 import { useTranslations } from "next-intl";
 import { useAtom } from "jotai";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { apiFetch, ApiError, getApiBase } from "@/lib/api";
 import { authTokenAtom } from "@/lib/atoms";
 import { formatMoney } from "@/lib/format";
-import type { ProductCsvImportResult, ProductWithInventory } from "@/lib/types";
+import type {
+  ProductBulkDeactivateResult,
+  ProductCsvImportStart,
+  ProductCsvImportStatus,
+  ProductWithInventory,
+} from "@/lib/types";
 
 type FormValues = {
   name: string;
+  brand: string;
+  category: string;
+  subcategory: string;
+  category_detail: string;
   price: string;
   cost: string;
   barcode: string;
@@ -41,6 +51,10 @@ type FormValues = {
 
 const emptyForm: FormValues = {
   name: "",
+  brand: "",
+  category: "",
+  subcategory: "",
+  category_detail: "",
   price: "",
   cost: "",
   barcode: "",
@@ -53,10 +67,17 @@ export function AdminProducts() {
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<ProductWithInventory[]>([]);
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importJobId, setImportJobId] = useState<string | null>(null);
+  const [importStatus, setImportStatus] = useState<ProductCsvImportStatus | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [bulkRemoving, setBulkRemoving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ProductWithInventory | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const importLastProcessedRef = useRef(0);
 
   const { register, handleSubmit, reset, control, formState } = useForm<FormValues>({
     defaultValues: emptyForm,
@@ -86,6 +107,53 @@ export function AdminProducts() {
     return () => window.clearTimeout(id);
   }, [load]);
 
+  useEffect(() => {
+    if (!token || !importJobId) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const status = await apiFetch<ProductCsvImportStatus>(`/admin/products/import/${importJobId}`, {
+          token,
+        });
+        if (cancelled) return;
+        setImportStatus(status);
+        if (status.processed > importLastProcessedRef.current) {
+          importLastProcessedRef.current = status.processed;
+          void load();
+        }
+        if (status.status === "completed") {
+          setImporting(false);
+          setImportJobId(null);
+          setImportStatus(null);
+          setMsg(
+            t("importResult", {
+              created: String(status.created),
+              updated: String(status.updated),
+            }),
+          );
+          void load();
+        } else if (status.status === "failed") {
+          setImporting(false);
+          setImportJobId(null);
+          setImportStatus(null);
+          setErr(status.errors.join("\n") || t("importFailed"));
+        }
+      } catch (e) {
+        if (cancelled) return;
+        setImporting(false);
+        setImportJobId(null);
+        setImportStatus(null);
+        setErr(e instanceof ApiError ? e.message : t("importFailed"));
+      }
+    };
+    void poll();
+    const timerId = window.setInterval(() => void poll(), 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timerId);
+    };
+  }, [token, importJobId, load, t]);
+
   function openCreate() {
     setEditing(null);
     reset(emptyForm);
@@ -96,6 +164,10 @@ export function AdminProducts() {
     setEditing(p);
     reset({
       name: p.name,
+      brand: p.brand ?? "",
+      category: p.category ?? "",
+      subcategory: p.subcategory ?? "",
+      category_detail: p.category_detail ?? "",
       price: String(p.price),
       cost: p.cost ? String(p.cost) : "",
       barcode: p.barcode ?? "",
@@ -110,6 +182,10 @@ export function AdminProducts() {
     try {
       const body = {
         name: values.name.trim(),
+        brand: values.brand.trim() || null,
+        category: values.category.trim() || null,
+        subcategory: values.subcategory.trim() || null,
+        category_detail: values.category_detail.trim() || null,
         price: values.price,
         cost: values.cost.trim() || null,
         barcode: values.barcode.trim() || null,
@@ -148,42 +224,87 @@ export function AdminProducts() {
   }
 
   async function exportCsv() {
-    if (!token) return;
-    const res = await fetch(`${getApiBase()}/admin/products/export`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      setErr("export");
-      return;
+    if (!token || exporting || importing) return;
+    setErr(null);
+    setMsg(null);
+    setExporting(true);
+    try {
+      const res = await fetch(`${getApiBase()}/admin/products/export`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        setErr(t("exportFailed"));
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "products.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      setMsg(t("exportSuccess"));
+    } catch {
+      setErr(t("exportFailed"));
+    } finally {
+      setExporting(false);
     }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "products.csv";
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   async function importCsv(file: File | null) {
-    if (!token || !file) return;
+    if (!token || !file || importing || exporting) return;
+    setErr(null);
+    setMsg(null);
+    setImportStatus(null);
+    setImporting(true);
     const fd = new FormData();
     fd.append("file", file);
     try {
-      const r = await apiFetch<ProductCsvImportResult>("/admin/products/import", {
+      const start = await apiFetch<ProductCsvImportStart>("/admin/products/import", {
         method: "POST",
         token,
         body: fd,
       });
-      setMsg(
-        t("importResult", {
-          created: String(r.created),
-          updated: String(r.updated),
-        }),
-      );
+      importLastProcessedRef.current = 0;
+      setImportJobId(start.job_id);
+      setImportStatus({
+        job_id: start.job_id,
+        status: "queued",
+        row_count: start.row_count,
+        processed: 0,
+        created: 0,
+        updated: 0,
+        errors: [],
+      });
+      setMsg(t("importStarted", { rows: String(start.row_count) }));
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : t("importFailed"));
+      setImporting(false);
+    } finally {
+      if (importInputRef.current) {
+        importInputRef.current.value = "";
+      }
+    }
+  }
+
+  async function removeAllProducts() {
+    if (!token || importing || exporting || bulkRemoving) return;
+    const confirmed = window.confirm(t("removeAllWarning"));
+    if (!confirmed) return;
+    setErr(null);
+    setMsg(null);
+    setBulkRemoving(true);
+    try {
+      const res = await apiFetch<ProductBulkDeactivateResult>("/admin/products", {
+        method: "DELETE",
+        token,
+      });
+      setMsg(t("removeAllResult", { count: String(res.deactivated) }));
       void load();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "—");
+      setErr(e instanceof ApiError ? e.message : t("removeAllFailed"));
+    } finally {
+      setBulkRemoving(false);
     }
   }
 
@@ -200,17 +321,34 @@ export function AdminProducts() {
         <Button variant="contained" onClick={openCreate}>
           {t("newProduct")}
         </Button>
-        <Button variant="outlined" onClick={() => void exportCsv()}>
-          {t("export")}
+        <Button
+          variant="outlined"
+          onClick={() => void exportCsv()}
+          disabled={importing || exporting || bulkRemoving}
+        >
+          {exporting ? t("exporting") : t("export")}
         </Button>
-        <Button variant="outlined" component="label">
-          {t("import")}
+        <Button
+          variant="outlined"
+          component="label"
+          disabled={importing || exporting || bulkRemoving}
+        >
+          {importing ? t("importing") : t("import")}
           <input
+            ref={importInputRef}
             type="file"
             accept=".csv,text/csv"
             hidden
             onChange={(e) => void importCsv(e.target.files?.[0] ?? null)}
           />
+        </Button>
+        <Button
+          variant="contained"
+          color="error"
+          onClick={() => void removeAllProducts()}
+          disabled={importing || exporting || bulkRemoving}
+        >
+          {bulkRemoving ? t("removingAll") : t("removeAll")}
         </Button>
       </Stack>
 
@@ -224,11 +362,33 @@ export function AdminProducts() {
           {msg}
         </Alert>
       )}
+      {importStatus && (
+        <Stack spacing={1}>
+          <Typography variant="body2" color="text.secondary">
+            {t("importProgress", {
+              processed: String(importStatus.processed),
+              total: String(importStatus.row_count),
+              created: String(importStatus.created),
+              updated: String(importStatus.updated),
+            })}
+          </Typography>
+          <LinearProgress
+            variant="determinate"
+            value={
+              importStatus.row_count > 0
+                ? Math.min((importStatus.processed / importStatus.row_count) * 100, 100)
+                : 0
+            }
+          />
+        </Stack>
+      )}
 
       <Table size="small">
         <TableHead>
           <TableRow>
             <TableCell>{t("name")}</TableCell>
+            <TableCell>{t("brand")}</TableCell>
+            <TableCell>{t("category")}</TableCell>
             <TableCell>{t("barcode")}</TableCell>
             <TableCell align="right">{t("price")}</TableCell>
             <TableCell align="right">{t("stock")}</TableCell>
@@ -239,7 +399,7 @@ export function AdminProducts() {
         <TableBody>
           {loading && (
             <TableRow>
-              <TableCell colSpan={6}>
+              <TableCell colSpan={8}>
                 <Typography color="text.secondary">…</Typography>
               </TableCell>
             </TableRow>
@@ -248,6 +408,8 @@ export function AdminProducts() {
             rows.map((p) => (
               <TableRow key={p.id} hover>
                 <TableCell>{p.name}</TableCell>
+                <TableCell>{p.brand ?? "—"}</TableCell>
+                <TableCell>{p.category_detail ?? p.subcategory ?? p.category ?? "—"}</TableCell>
                 <TableCell>{p.barcode ?? "—"}</TableCell>
                 <TableCell align="right">{formatMoney(p.price)}</TableCell>
                 <TableCell align="right">
@@ -281,6 +443,10 @@ export function AdminProducts() {
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
               <TextField label={t("name")} required {...register("name", { required: true })} />
+              <TextField label={t("brand")} {...register("brand")} />
+              <TextField label={t("category")} {...register("category")} />
+              <TextField label={t("subcategory")} {...register("subcategory")} />
+              <TextField label={t("categoryDetail")} {...register("category_detail")} />
               <TextField label={t("price")} required {...register("price", { required: true })} />
               <TextField label={t("cost")} {...register("cost")} />
               <TextField label={t("barcode")} {...register("barcode")} />

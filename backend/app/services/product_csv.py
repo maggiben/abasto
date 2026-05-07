@@ -13,6 +13,10 @@ CSV_COLUMNS = [
     "id",
     "name",
     "description",
+    "brand",
+    "category",
+    "subcategory",
+    "category_detail",
     "price",
     "cost",
     "margin_percent",
@@ -27,7 +31,23 @@ CSV_COLUMNS = [
 ]
 
 # Semicolon catalog: ean;producto;brand;cat1;cat2;cat3 (legacy / scan.py feeds).
-# Required headers (case-insensitive): ean, producto. Optional: brand, cat1–cat3.
+# Required headers (case-insensitive): ean, producto. Optional: brand, cat1-cat3.
+FULL_REQUIRED_COLUMNS = [
+    "id",
+    "name",
+    "description",
+    "price",
+    "cost",
+    "margin_percent",
+    "barcode",
+    "weight_grams",
+    "expiration_date",
+    "image_url",
+    "is_fractional",
+    "is_active",
+    "quantity",
+    "low_stock_threshold",
+]
 
 
 def _strip_cell(v: Any) -> str:
@@ -109,19 +129,6 @@ def _infer_csv_delimiter(sample: str) -> str:
     return ","
 
 
-def _catalog_extra_description(brand: str, categories: list[str]) -> str | None:
-    lines: list[str] = []
-    b = brand.strip()
-    if b:
-        lines.append(f"Brand: {b}")
-    trail = " › ".join(c.strip() for c in categories if c and c.strip())
-    if trail:
-        lines.append(f"Category: {trail}")
-    if not lines:
-        return None
-    return "\n".join(lines)
-
-
 def _append_duplicate_row_errors(rows: list[ParsedProductRow], errors: list[str]) -> None:
     seen_ids: dict[int, int] = {}
     for r in rows:
@@ -169,16 +176,16 @@ def _parse_catalog_rows(
         if not name:
             errors.append(f"Row {i}: producto is required")
             continue
-        desc = _catalog_extra_description(
-            cell(raw, "brand"),
-            [cell(raw, "cat1"), cell(raw, "cat2"), cell(raw, "cat3")],
-        )
         rows.append(
             ParsedProductRow(
                 row_index=i,
                 id=None,
                 name=name,
-                description=desc,
+                description=None,
+                brand=cell(raw, "brand") or None,
+                category=cell(raw, "cat1") or None,
+                subcategory=cell(raw, "cat2") or None,
+                category_detail=cell(raw, "cat3") or None,
                 price=Decimal("0"),
                 cost=None,
                 margin_percent=None,
@@ -201,6 +208,10 @@ class ParsedProductRow:
     id: int | None
     name: str
     description: str | None
+    brand: str | None
+    category: str | None
+    subcategory: str | None
+    category_detail: str | None
     price: Decimal
     cost: Decimal | None
     margin_percent: Decimal | None
@@ -219,7 +230,7 @@ def parse_import_csv(content: str) -> tuple[list[ParsedProductRow], list[str]]:
 
     Supports:
     - Full export template: comma or semicolon; columns in CSV_COLUMNS.
-    - Legacy catalog: ean;producto;brand;cat1;cat2;cat3 — price and quantity default to 0.
+    - Legacy catalog: ean;producto;brand;cat1;cat2;cat3 - price and quantity default to 0.
     """
     errors: list[str] = []
     delimiter = _infer_csv_delimiter(content)
@@ -236,7 +247,7 @@ def parse_import_csv(content: str) -> tuple[list[ParsedProductRow], list[str]]:
         return rows, errors
 
     headers = [_norm_header(h) for h in fieldnames]
-    missing = [c for c in CSV_COLUMNS if c not in headers]
+    missing = [c for c in FULL_REQUIRED_COLUMNS if c not in headers]
     if missing:
         return [], [f"Missing columns: {', '.join(missing)}"]
     # Map canonical column -> actual key from file (normalized)
@@ -316,6 +327,10 @@ def parse_import_csv(content: str) -> tuple[list[ParsedProductRow], list[str]]:
             active = True
 
         desc = cell("description") or None
+        brand = cell("brand") or None
+        category = cell("category") or None
+        subcategory = cell("subcategory") or None
+        category_detail = cell("category_detail") or None
         bc = cell("barcode") or None
         img = cell("image_url") or None
 
@@ -325,6 +340,10 @@ def parse_import_csv(content: str) -> tuple[list[ParsedProductRow], list[str]]:
                 id=eid,
                 name=name,
                 description=desc,
+                brand=brand,
+                category=category,
+                subcategory=subcategory,
+                category_detail=category_detail,
                 price=price,
                 cost=cost,
                 margin_percent=margin,
@@ -351,6 +370,10 @@ def row_to_csv_values(p: Product) -> list[str]:
         str(p.id),
         p.name,
         p.description or "",
+        p.brand or "",
+        p.category or "",
+        p.subcategory or "",
+        p.category_detail or "",
         str(p.price),
         "" if p.cost is None else str(p.cost),
         "" if p.margin_percent is None else str(p.margin_percent),

@@ -40,6 +40,9 @@ export default function AdminHomePage() {
   if (err) {
     return <Typography color="error">{err}</Typography>;
   }
+  if (!token) {
+    return null;
+  }
   if (loading || !data) {
     return (
       <Stack alignItems="center" py={4}>

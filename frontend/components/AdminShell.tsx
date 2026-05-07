@@ -18,7 +18,7 @@ import {
   authUserAtom,
   clearAuthAtom,
 } from "@/lib/atoms";
-import { Link, usePathname, useRouter } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const t = useTranslations("admin");
@@ -27,7 +27,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [user] = useAtom(authUserAtom);
   const clearAuth = useSetAtom(clearAuthAtom);
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
     if (!ready) return;
@@ -63,7 +62,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             color="inherit"
             component={Link}
             href="/admin"
-            variant={pathname === "/admin" ? "outlined" : "text"}
+            variant="text"
           >
             {t("navHome")}
           </Button>
@@ -71,7 +70,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             color="inherit"
             component={Link}
             href="/admin/products"
-            variant={pathname?.startsWith("/admin/products") ? "outlined" : "text"}
+            variant="text"
           >
             {t("navProducts")}
           </Button>
@@ -79,7 +78,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             color="inherit"
             component={Link}
             href="/admin/inventory"
-            variant={pathname?.startsWith("/admin/inventory") ? "outlined" : "text"}
+            variant="text"
           >
             {t("navInventory")}
           </Button>

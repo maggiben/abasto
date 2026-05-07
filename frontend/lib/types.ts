@@ -40,6 +40,10 @@ export type ProductWithInventory = {
   id: number;
   name: string;
   description: string | null;
+  brand: string | null;
+  category: string | null;
+  subcategory: string | null;
+  category_detail: string | null;
   price: string;
   cost: string | null;
   margin_percent: string | null;
@@ -86,4 +90,25 @@ export type ProductCsvImportResult = {
   row_count: number;
   created: number;
   updated: number;
+};
+
+export type ProductCsvImportStart = {
+  job_id: string;
+  row_count: number;
+  created_estimate: number;
+  updated_estimate: number;
+};
+
+export type ProductCsvImportStatus = {
+  job_id: string;
+  status: "queued" | "running" | "completed" | "failed";
+  row_count: number;
+  processed: number;
+  created: number;
+  updated: number;
+  errors: string[];
+};
+
+export type ProductBulkDeactivateResult = {
+  deactivated: number;
 };
