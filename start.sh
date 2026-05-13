@@ -2,6 +2,28 @@
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
+# zenity / .desktop / cron often get a tiny PATH; Node is frequently under $HOME (nvm, fnm, volta).
+ensure_node_on_path() {
+  if command -v npm >/dev/null 2>&1; then
+    return 0
+  fi
+  export PATH="${HOME:-}/.local/bin:${HOME:-}/.volta/bin:${PATH:-/usr/local/bin:/usr/bin:/bin}"
+  if [ -s "${HOME:-}/.nvm/nvm.sh" ]; then
+    NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+    export NVM_DIR
+    # shellcheck disable=SC1090
+    . "$NVM_DIR/nvm.sh" --no-use
+    nvm use default >/dev/null 2>&1 || nvm use node >/dev/null 2>&1 || true
+  fi
+  if command -v fnm >/dev/null 2>&1; then
+    eval "$(fnm env 2>/dev/null)" || true
+  fi
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "# ERROR: npm not in PATH (non-interactive / GUI). Add Node to PATH or install system node/npm."
+    return 1
+  fi
+}
+
 wait_postgres() {
   local start=$SECONDS
   echo "# Waiting for PostgreSQL to accept connections..."
@@ -53,6 +75,11 @@ cd "$REPO_ROOT" || {
   exit 1
 }
 
+ensure_node_on_path || {
+  echo "100"
+  exit 1
+}
+
 echo "# Starting database"
 docker compose up -d postgres || {
   echo "# ERROR: docker compose up postgres failed"
@@ -100,7 +127,7 @@ wait_http "http://127.0.0.1:8000/health" "API (backend finished starting)" 600 |
 
 echo "75"
 echo "# Starting frontend..."
-nohup npm run standalone >>/tmp/abasto-frontend-standalone.log 2>&1 &
+nohup bash -lc "cd \"$REPO_ROOT/frontend\" && npm run standalone" >>/tmp/abasto-frontend-standalone.log 2>&1 &
 
 wait_http "http://127.0.0.1:3000/es" "Next.js standalone" 180 || {
   echo "# ERROR: frontend did not listen on :3000 (see /tmp/abasto-frontend-standalone.log)"
