@@ -58,6 +58,11 @@ export type ProductWithInventory = {
   inventory: InventoryPublic | null;
 };
 
+export type ProductListPage = {
+  items: ProductWithInventory[];
+  total: number;
+};
+
 export type CheckoutResponse = {
   sale_id: number;
   created_at: string;

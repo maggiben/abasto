@@ -18,6 +18,7 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAtom, useSetAtom } from "jotai";
 import { apiFetch, ApiError } from "@/lib/api";
+import { translatePosApiDetail } from "@/lib/posApiErrors";
 import { authTokenAtom, clearAuthAtom } from "@/lib/atoms";
 import { formatMoney } from "@/lib/format";
 import type { CheckoutResponse, PriceCheckResponse, ProductCatalogItem } from "@/lib/types";
@@ -62,6 +63,10 @@ function stepFor(line: CartLine): number {
 
 export function PosTerminal() {
   const t = useTranslations("pos");
+  const formatApiErr = useCallback(
+    (message: string) => translatePosApiDetail(message, t),
+    [t],
+  );
   const [token] = useAtom(authTokenAtom);
   const clearAuth = useSetAtom(clearAuthAtom);
 
@@ -145,7 +150,7 @@ export function PosTerminal() {
         setQuery("");
         focusSearch();
       } catch (e) {
-        setErr(e instanceof ApiError ? e.message : t("checkoutErr"));
+        setErr(e instanceof ApiError ? formatApiErr(e.message) : t("checkoutErr"));
       }
       return;
     }
@@ -164,9 +169,9 @@ export function PosTerminal() {
       setResults(rows);
       setPick(0);
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : t("checkoutErr"));
+      setErr(e instanceof ApiError ? formatApiErr(e.message) : t("checkoutErr"));
     }
-  }, [query, dry, t, addProduct, focusSearch]);
+  }, [query, dry, t, addProduct, focusSearch, formatApiErr]);
 
   const checkout = useCallback(async () => {
     if (!token || linesRef.current.length === 0) return;
@@ -195,9 +200,9 @@ export function PosTerminal() {
       setMsg(t("checkoutOk", { id: String(res.sale_id) }));
       focusSearch();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : t("checkoutErr"));
+      setErr(e instanceof ApiError ? formatApiErr(e.message) : t("checkoutErr"));
     }
-  }, [token, t, focusSearch]);
+  }, [token, t, focusSearch, formatApiErr]);
 
   const removeLine = useCallback((index: number) => {
     setLines((prev) => {

@@ -126,6 +126,13 @@ class ProductWithInventory(ProductPublic):
     inventory: InventoryPublic | None
 
 
+class ProductListPage(BaseModel):
+    """Paginated admin product list (inventory joined for quantity filters/sorts)."""
+
+    items: list[ProductWithInventory]
+    total: int
+
+
 class PrintLabelBody(BaseModel):
     """Print a product label on the USB thermal printer (server-side)."""
 

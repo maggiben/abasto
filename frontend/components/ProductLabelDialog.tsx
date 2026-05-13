@@ -74,7 +74,7 @@ export function ProductLabelDialog({
 
   useLayoutEffect(() => {
     if (!open || !barcode.trim()) {
-      setEncodeErr(null);
+      queueMicrotask(() => setEncodeErr(null));
       return;
     }
 

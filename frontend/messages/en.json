@@ -29,6 +29,7 @@
     "empty": "No items",
     "checkoutOk": "Sale #{id}",
     "checkoutErr": "Checkout failed",
+    "apiInsufficientStock": "Insufficient stock for product {productId}: need {need}, have {have}",
     "priceCheck": "Price check",
     "calc": "Calculator",
     "remove": "Delete",
@@ -93,6 +94,11 @@
     "lowStockThreshold": "Low stock threshold",
     "inventoryQtyRequired": "Quantity is required",
     "inventorySaved": "Inventory updated",
+    "showInactive": "Show inactive products",
+    "stockHealthFilter": "Stock vs threshold",
+    "stockHealthAll": "All",
+    "stockHealthLow": "At or below low-stock threshold",
+    "stockHealthExcess": "Above threshold (excess)",
     "logout": "Log out"
   }
 }

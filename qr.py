@@ -10,6 +10,9 @@ dev = usb.core.find(idVendor=VENDOR_ID, idProduct=PRODUCT_ID)
 if dev is None:
     raise ValueError("Printer not found")
 
+if dev.is_kernel_driver_active(0):
+    dev.detach_kernel_driver(0)
+
 dev.set_configuration()
 
 cfg = dev.get_active_configuration()

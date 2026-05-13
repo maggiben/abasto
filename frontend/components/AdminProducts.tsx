@@ -9,19 +9,18 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   FormControlLabel,
   IconButton,
+  InputLabel,
   LinearProgress,
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
+  Select,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
+  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -29,11 +28,24 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditIcon from "@mui/icons-material/Edit";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PrintIcon from "@mui/icons-material/Print";
-import { useTranslations } from "next-intl";
+import {
+  DataGrid,
+  GridToolbarColumnsButton,
+  GridToolbarContainer,
+  GridToolbarDensitySelector,
+  GridToolbarFilterButton,
+  type GridColDef,
+  type GridFilterModel,
+  type GridPaginationModel,
+  type GridSortModel,
+} from "@mui/x-data-grid";
+import { esES } from "@mui/x-data-grid/locales";
+import { useLocale, useTranslations } from "next-intl";
 import { useAtom } from "jotai";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { apiFetch, ApiError, getApiBase } from "@/lib/api";
+import { buildAdminProductListSearchParams } from "@/lib/adminProductListQuery";
 import { authTokenAtom } from "@/lib/atoms";
 import { formatMoney } from "@/lib/format";
 import { isValidManualBarcode } from "@/lib/printProductLabel";
@@ -42,6 +54,7 @@ import type {
   ProductBulkDeactivateResult,
   ProductCsvImportStart,
   ProductCsvImportStatus,
+  ProductListPage,
   ProductWithInventory,
 } from "@/lib/types";
 
@@ -71,9 +84,23 @@ const emptyForm: FormValues = {
 
 export function AdminProducts() {
   const t = useTranslations("admin");
+  const locale = useLocale();
   const [token] = useAtom(authTokenAtom);
-  const [q, setQ] = useState("");
   const [rows, setRows] = useState<ProductWithInventory[]>([]);
+  const [rowCount, setRowCount] = useState(0);
+  const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({
+    page: 0,
+    pageSize: 25,
+  });
+  const [sortModel, setSortModel] = useState<GridSortModel>([{ field: "id", sort: "desc" }]);
+  const [filterModel, setFilterModel] = useState<GridFilterModel>({ items: [] });
+  const [debouncedFilterModel, setDebouncedFilterModel] = useState<GridFilterModel>({ items: [] });
+  const [gridToolbar, setGridToolbar] = useState({
+    q: "",
+    includeInactive: false,
+    stockHealth: "all" as "all" | "low" | "excess",
+  });
+  const [debouncedSearchQ, setDebouncedSearchQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importJobId, setImportJobId] = useState<string | null>(null);
@@ -100,27 +127,48 @@ export function AdminProducts() {
   const barcodeField = watch("barcode");
   const nameField = watch("name");
 
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedFilterModel(filterModel), 400);
+    return () => window.clearTimeout(id);
+  }, [filterModel]);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedSearchQ(gridToolbar.q), 400);
+    return () => window.clearTimeout(id);
+  }, [gridToolbar.q]);
+
+  const listToolbar = useMemo(
+    () => ({
+      q: debouncedSearchQ,
+      includeInactive: gridToolbar.includeInactive,
+      stockHealth: gridToolbar.stockHealth,
+    }),
+    [debouncedSearchQ, gridToolbar.includeInactive, gridToolbar.stockHealth],
+  );
+
   const load = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setErr(null);
     try {
-      const qs = new URLSearchParams({ limit: "200" });
-      if (q.trim()) qs.set("q", q.trim());
-      const list = await apiFetch<ProductWithInventory[]>(
-        `/admin/products?${qs.toString()}`,
-        { token },
+      const qs = buildAdminProductListSearchParams(
+        paginationModel,
+        sortModel,
+        debouncedFilterModel,
+        listToolbar,
       );
-      setRows(list);
+      const page = await apiFetch<ProductListPage>(`/admin/products?${qs}`, { token });
+      setRows(page.items);
+      setRowCount(page.total);
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "—");
     } finally {
       setLoading(false);
     }
-  }, [token, q]);
+  }, [token, paginationModel, sortModel, debouncedFilterModel, listToolbar]);
 
   useEffect(() => {
-    const id = window.setTimeout(() => void load(), 300);
+    const id = window.setTimeout(() => void load(), 120);
     return () => window.clearTimeout(id);
   }, [load]);
 
@@ -170,6 +218,121 @@ export function AdminProducts() {
       window.clearInterval(timerId);
     };
   }, [token, importJobId, load, t]);
+
+  const columns: GridColDef<ProductWithInventory>[] = useMemo(
+    () => [
+      { field: "name", headerName: t("name"), flex: 1, minWidth: 160 },
+      { field: "brand", headerName: t("brand"), width: 120 },
+      {
+        field: "categoryDisplay",
+        headerName: t("category"),
+        flex: 0.8,
+        minWidth: 120,
+        valueGetter: (_v, row) =>
+          row.category_detail ?? row.subcategory ?? row.category ?? "—",
+      },
+      { field: "barcode", headerName: t("barcode"), width: 140 },
+      {
+        field: "price",
+        headerName: t("price"),
+        type: "number",
+        width: 110,
+        align: "right",
+        headerAlign: "right",
+        valueGetter: (_v, row) => Number(row.price),
+        renderCell: (params) => formatMoney(params.row.price),
+      },
+      {
+        field: "stock",
+        headerName: t("stock"),
+        type: "number",
+        width: 110,
+        align: "right",
+        headerAlign: "right",
+        valueGetter: (_v, row) => Number(row.inventory?.quantity ?? 0),
+        renderCell: (params) =>
+          params.row.inventory ? formatMoney(params.row.inventory.quantity) : "—",
+      },
+      {
+        field: "is_active",
+        headerName: t("active"),
+        type: "boolean",
+        width: 100,
+        valueGetter: (_v, row) => row.is_active,
+      },
+      {
+        field: "actions",
+        headerName: t("actions"),
+        width: 72,
+        align: "right",
+        headerAlign: "right",
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <IconButton
+            aria-label={t("actionsMenu")}
+            size="small"
+            onClick={(e) => setRowMenu({ anchor: e.currentTarget, row: params.row })}
+          >
+            <MoreVertIcon fontSize="small" />
+          </IconButton>
+        ),
+      },
+    ],
+    [t],
+  );
+
+  function ProductsToolbar() {
+    return (
+      <GridToolbarContainer sx={{ flexWrap: "wrap", gap: 1, py: 1, alignItems: "center" }}>
+        <GridToolbarColumnsButton />
+        <GridToolbarFilterButton />
+        <GridToolbarDensitySelector />
+        <TextField
+          label={t("search")}
+          size="small"
+          value={gridToolbar.q}
+          onChange={(e) => {
+            setGridToolbar((g) => ({ ...g, q: e.target.value }));
+            setPaginationModel((p) => ({ ...p, page: 0 }));
+          }}
+          sx={{ minWidth: 200 }}
+        />
+        <FormControlLabel
+          control={
+            <Switch
+              checked={gridToolbar.includeInactive}
+              onChange={(_, checked) => {
+                setGridToolbar((g) => ({ ...g, includeInactive: checked }));
+                setPaginationModel((p) => ({ ...p, page: 0 }));
+              }}
+            />
+          }
+          label={t("showInactive")}
+        />
+        <FormControl size="small" sx={{ minWidth: 220 }}>
+          <InputLabel id="admin-products-stock-health">{t("stockHealthFilter")}</InputLabel>
+          <Select
+            labelId="admin-products-stock-health"
+            label={t("stockHealthFilter")}
+            value={gridToolbar.stockHealth}
+            onChange={(e) => {
+              setGridToolbar((g) => ({
+                ...g,
+                stockHealth: e.target.value as "all" | "low" | "excess",
+              }));
+              setPaginationModel((p) => ({ ...p, page: 0 }));
+            }}
+          >
+            <MenuItem value="all">{t("stockHealthAll")}</MenuItem>
+            <MenuItem value="low">{t("stockHealthLow")}</MenuItem>
+            <MenuItem value="excess">{t("stockHealthExcess")}</MenuItem>
+          </Select>
+        </FormControl>
+      </GridToolbarContainer>
+    );
+  }
 
   function openCreate() {
     setEditing(null);
@@ -352,16 +515,13 @@ export function AdminProducts() {
     }
   }
 
+  const gridLocaleText = locale.startsWith("es")
+    ? esES.components?.MuiDataGrid?.defaultProps?.localeText
+    : undefined;
+
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center">
-        <TextField
-          label={t("search")}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          size="small"
-          sx={{ minWidth: 240 }}
-        />
         <Button variant="contained" onClick={openCreate}>
           {t("newProduct")}
         </Button>
@@ -427,52 +587,40 @@ export function AdminProducts() {
         </Stack>
       )}
 
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>{t("name")}</TableCell>
-            <TableCell>{t("brand")}</TableCell>
-            <TableCell>{t("category")}</TableCell>
-            <TableCell>{t("barcode")}</TableCell>
-            <TableCell align="right">{t("price")}</TableCell>
-            <TableCell align="right">{t("stock")}</TableCell>
-            <TableCell align="center">{t("active")}</TableCell>
-            <TableCell align="right">{t("actions")}</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {loading && (
-            <TableRow>
-              <TableCell colSpan={8}>
-                <Typography color="text.secondary">…</Typography>
-              </TableCell>
-            </TableRow>
-          )}
-          {!loading &&
-            rows.map((p) => (
-              <TableRow key={p.id} hover>
-                <TableCell>{p.name}</TableCell>
-                <TableCell>{p.brand ?? "—"}</TableCell>
-                <TableCell>{p.category_detail ?? p.subcategory ?? p.category ?? "—"}</TableCell>
-                <TableCell>{p.barcode ?? "—"}</TableCell>
-                <TableCell align="right">{formatMoney(p.price)}</TableCell>
-                <TableCell align="right">
-                  {p.inventory ? formatMoney(p.inventory.quantity) : "—"}
-                </TableCell>
-                <TableCell align="center">{p.is_active ? "✓" : "—"}</TableCell>
-                <TableCell align="right">
-                  <IconButton
-                    aria-label={t("actionsMenu")}
-                    size="small"
-                    onClick={(e) => setRowMenu({ anchor: e.currentTarget, row: p })}
-                  >
-                    <MoreVertIcon fontSize="small" />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-        </TableBody>
-      </Table>
+      <Box sx={{ width: "100%", height: 560 }}>
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          getRowId={(r) => r.id}
+          loading={loading}
+          rowCount={rowCount}
+          paginationMode="server"
+          paginationModel={paginationModel}
+          onPaginationModelChange={(m) => setPaginationModel(m)}
+          pageSizeOptions={[25, 50, 100, 200]}
+          sortingMode="server"
+          sortModel={sortModel}
+          onSortModelChange={(m) => {
+            setSortModel(m);
+            setPaginationModel((p) => ({ ...p, page: 0 }));
+          }}
+          filterMode="server"
+          filterModel={filterModel}
+          onFilterModelChange={(m) => {
+            setFilterModel(m);
+            setPaginationModel((p) => ({ ...p, page: 0 }));
+          }}
+          disableRowSelectionOnClick
+          slots={{ toolbar: ProductsToolbar }}
+          localeText={gridLocaleText}
+          sx={{
+            border: 1,
+            borderColor: "divider",
+            borderRadius: 1,
+            "& .MuiDataGrid-cell:focus-within": { outline: "none" },
+          }}
+        />
+      </Box>
 
       <Menu
         anchorEl={rowMenu?.anchor ?? null}

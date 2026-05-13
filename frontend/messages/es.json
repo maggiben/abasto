@@ -29,6 +29,7 @@
     "empty": "Sin ítems",
     "checkoutOk": "Venta #{id}",
     "checkoutErr": "Error al cobrar",
+    "apiInsufficientStock": "Stock insuficiente para el producto {productId}: se necesitan {need}, hay {have}",
     "priceCheck": "Consulta de precio",
     "calc": "Calculadora",
     "remove": "Eliminar",
@@ -93,6 +94,11 @@
     "lowStockThreshold": "Umbral de stock bajo",
     "inventoryQtyRequired": "La cantidad es obligatoria",
     "inventorySaved": "Inventario actualizado",
+    "showInactive": "Mostrar productos inactivos",
+    "stockHealthFilter": "Stock frente al umbral",
+    "stockHealthAll": "Todos",
+    "stockHealthLow": "En o por debajo del umbral",
+    "stockHealthExcess": "Por encima del umbral (exceso)",
     "logout": "Cerrar sesión"
   }
 }

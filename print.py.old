@@ -1,0 +1,14 @@
+import subprocess
+
+def print_ticket(text):
+    payload = b"\x1B\x40" + text.encode() + b"\n\n\n" + b"\x1D\x56\x00"
+
+    process = subprocess.Popen(
+        ["lp", "-d", "xp58", "-o", "raw"],
+        stdin=subprocess.PIPE
+    )
+
+    process.communicate(payload)
+
+for i in range(3):
+    print_ticket(f"TEST PYTHON {i}")

@@ -1,11 +1,12 @@
 import logging
-from typing import Annotated
+from decimal import Decimal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
-from sqlalchemy import or_, select, update
+from sqlalchemy import asc, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import contains_eager, selectinload
 from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_current_staff_user
@@ -18,6 +19,7 @@ from app.schemas.csv_import import ProductCsvImportResult, ProductCsvImportStart
 from app.schemas.product import (
     PrintLabelBody,
     ProductCreate,
+    ProductListPage,
     ProductPublic,
     ProductUpdate,
     ProductWithInventory,
@@ -39,6 +41,128 @@ from app.services.product_import_jobs import (
 router = APIRouter()
 IMPORT_BATCH_SIZE = 1000
 logger = logging.getLogger(__name__)
+
+_SORT_COLUMNS: dict[str, object] = {
+    "id": Product.id,
+    "name": Product.name,
+    "brand": Product.brand,
+    "category": func.coalesce(Product.category_detail, Product.subcategory, Product.category),
+    "barcode": Product.barcode,
+    "price": Product.price,
+    "quantity": func.coalesce(InventoryItem.quantity, Decimal("0")),
+    "low_stock_threshold": InventoryItem.low_stock_threshold,
+    "is_active": Product.is_active,
+    "created_at": Product.created_at,
+    "updated_at": Product.updated_at,
+}
+
+
+def _product_list_where(
+    *,
+    q: str | None,
+    include_inactive: bool,
+    is_active: bool | None,
+    name_contains: str | None,
+    name_exact: str | None,
+    brand_contains: str | None,
+    brand_exact: str | None,
+    category_contains: str | None,
+    category_exact: str | None,
+    barcode_contains: str | None,
+    barcode_exact: str | None,
+    price_min: Decimal | None,
+    price_max: Decimal | None,
+    price_gt: Decimal | None,
+    price_lt: Decimal | None,
+    price_eq: Decimal | None,
+    quantity_min: Decimal | None,
+    quantity_max: Decimal | None,
+    quantity_gt: Decimal | None,
+    quantity_lt: Decimal | None,
+    quantity_eq: Decimal | None,
+    low_threshold_min: Decimal | None,
+    low_threshold_max: Decimal | None,
+    low_threshold_gt: Decimal | None,
+    low_threshold_lt: Decimal | None,
+    stock_health: Literal["low", "excess"] | None,
+) -> list[object]:
+    qty = func.coalesce(InventoryItem.quantity, Decimal("0"))
+    clauses: list[object] = []
+    if is_active is not None:
+        clauses.append(Product.is_active.is_(is_active))
+    elif not include_inactive:
+        clauses.append(Product.is_active.is_(True))
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        clauses.append(
+            or_(
+                Product.name.ilike(term),
+                Product.barcode.ilike(term),
+                Product.brand.ilike(term),
+                Product.category.ilike(term),
+                Product.subcategory.ilike(term),
+                Product.category_detail.ilike(term),
+            ),
+        )
+    if name_exact and name_exact.strip():
+        clauses.append(func.lower(Product.name) == name_exact.strip().lower())
+    elif name_contains and name_contains.strip():
+        clauses.append(Product.name.ilike(f"%{name_contains.strip()}%"))
+    if brand_exact and brand_exact.strip():
+        clauses.append(func.lower(Product.brand) == brand_exact.strip().lower())
+    elif brand_contains and brand_contains.strip():
+        clauses.append(Product.brand.ilike(f"%{brand_contains.strip()}%"))
+    if category_exact and category_exact.strip():
+        cat_expr = func.coalesce(Product.category_detail, Product.subcategory, Product.category)
+        clauses.append(func.lower(cat_expr) == category_exact.strip().lower())
+    elif category_contains and category_contains.strip():
+        cat_expr = func.coalesce(Product.category_detail, Product.subcategory, Product.category)
+        clauses.append(cat_expr.ilike(f"%{category_contains.strip()}%"))
+    if barcode_exact and barcode_exact.strip():
+        clauses.append(func.lower(Product.barcode) == barcode_exact.strip().lower())
+    elif barcode_contains and barcode_contains.strip():
+        clauses.append(Product.barcode.ilike(f"%{barcode_contains.strip()}%"))
+    if price_eq is not None:
+        clauses.append(Product.price == price_eq)
+    else:
+        if price_min is not None:
+            clauses.append(Product.price >= price_min)
+        if price_max is not None:
+            clauses.append(Product.price <= price_max)
+        if price_gt is not None:
+            clauses.append(Product.price > price_gt)
+        if price_lt is not None:
+            clauses.append(Product.price < price_lt)
+    if quantity_eq is not None:
+        clauses.append(qty == quantity_eq)
+    else:
+        if quantity_min is not None:
+            clauses.append(qty >= quantity_min)
+        if quantity_max is not None:
+            clauses.append(qty <= quantity_max)
+        if quantity_gt is not None:
+            clauses.append(qty > quantity_gt)
+        if quantity_lt is not None:
+            clauses.append(qty < quantity_lt)
+    if low_threshold_min is not None:
+        clauses.append(InventoryItem.low_stock_threshold >= low_threshold_min)
+    if low_threshold_max is not None:
+        clauses.append(InventoryItem.low_stock_threshold <= low_threshold_max)
+    if low_threshold_gt is not None:
+        clauses.append(InventoryItem.low_stock_threshold > low_threshold_gt)
+    if low_threshold_lt is not None:
+        clauses.append(InventoryItem.low_stock_threshold < low_threshold_lt)
+    if stock_health == "low":
+        clauses.append(
+            InventoryItem.low_stock_threshold.isnot(None)
+            & (qty <= InventoryItem.low_stock_threshold),
+        )
+    elif stock_health == "excess":
+        clauses.append(
+            InventoryItem.low_stock_threshold.isnot(None)
+            & (qty > InventoryItem.low_stock_threshold),
+        )
+    return clauses
 
 
 async def _run_import_job(job_id: str, rows: list[ParsedProductRow], actor_user_id: int) -> None:
@@ -81,7 +205,7 @@ async def _run_import_job(job_id: str, rows: list[ParsedProductRow], actor_user_
         await fail_job(job_id, str(exc))
 
 
-@router.get("", response_model=list[ProductWithInventory])
+@router.get("", response_model=ProductListPage)
 async def list_products(
     session: Annotated[AsyncSession, Depends(get_session)],
     _: Annotated[User, Depends(get_current_staff_user)],
@@ -90,32 +214,91 @@ async def list_products(
         description="Filter by name or barcode (substring, case-insensitive).",
     ),
     include_inactive: bool = Query(default=False),
+    is_active: bool | None = Query(
+        default=None,
+        description="When set, filters active flag (use with include_inactive to see inactive rows).",
+    ),
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=200),
-) -> list[Product]:
+    limit: int = Query(default=50, ge=1, le=500),
+    sort: str = Query(default="id", description="Column id for ordering."),
+    order: Literal["asc", "desc"] = Query(default="desc"),
+    name_contains: str | None = None,
+    name_exact: str | None = None,
+    brand_contains: str | None = None,
+    brand_exact: str | None = None,
+    category_contains: str | None = None,
+    category_exact: str | None = None,
+    barcode_contains: str | None = None,
+    barcode_exact: str | None = None,
+    price_min: Decimal | None = None,
+    price_max: Decimal | None = None,
+    price_gt: Decimal | None = None,
+    price_lt: Decimal | None = None,
+    price_eq: Decimal | None = None,
+    quantity_min: Decimal | None = None,
+    quantity_max: Decimal | None = None,
+    quantity_gt: Decimal | None = None,
+    quantity_lt: Decimal | None = None,
+    quantity_eq: Decimal | None = None,
+    low_threshold_min: Decimal | None = None,
+    low_threshold_max: Decimal | None = None,
+    low_threshold_gt: Decimal | None = None,
+    low_threshold_lt: Decimal | None = None,
+    stock_health: Literal["low", "excess"] | None = Query(
+        default=None,
+        description="low: quantity at or below threshold when threshold is set. excess: quantity above threshold.",
+    ),
+) -> ProductListPage:
+    sort_col = _SORT_COLUMNS.get(sort, Product.id)
+    clauses = _product_list_where(
+        q=q,
+        include_inactive=include_inactive,
+        is_active=is_active,
+        name_contains=name_contains,
+        name_exact=name_exact,
+        brand_contains=brand_contains,
+        brand_exact=brand_exact,
+        category_contains=category_contains,
+        category_exact=category_exact,
+        barcode_contains=barcode_contains,
+        barcode_exact=barcode_exact,
+        price_min=price_min,
+        price_max=price_max,
+        price_gt=price_gt,
+        price_lt=price_lt,
+        price_eq=price_eq,
+        quantity_min=quantity_min,
+        quantity_max=quantity_max,
+        quantity_gt=quantity_gt,
+        quantity_lt=quantity_lt,
+        quantity_eq=quantity_eq,
+        low_threshold_min=low_threshold_min,
+        low_threshold_max=low_threshold_max,
+        low_threshold_gt=low_threshold_gt,
+        low_threshold_lt=low_threshold_lt,
+        stock_health=stock_health,
+    )
+    count_stmt = (
+        select(func.count(Product.id))
+        .select_from(Product)
+        .outerjoin(InventoryItem, InventoryItem.product_id == Product.id)
+        .where(*clauses)
+    )
+    total = int((await session.execute(count_stmt)).scalar_one())
+    order_primary = asc(sort_col) if order == "asc" else desc(sort_col)
+    order_id = asc(Product.id) if order == "asc" else desc(Product.id)
     stmt = (
         select(Product)
-        .options(selectinload(Product.inventory))
-        .order_by(Product.id.desc())
+        .outerjoin(InventoryItem, InventoryItem.product_id == Product.id)
+        .options(contains_eager(Product.inventory))
+        .where(*clauses)
+        .order_by(order_primary, order_id)
         .offset(skip)
         .limit(limit)
     )
-    if not include_inactive:
-        stmt = stmt.where(Product.is_active.is_(True))
-    if q:
-        term = f"%{q.strip()}%"
-        stmt = stmt.where(
-            or_(
-                Product.name.ilike(term),
-                Product.barcode.ilike(term),
-                Product.brand.ilike(term),
-                Product.category.ilike(term),
-                Product.subcategory.ilike(term),
-                Product.category_detail.ilike(term),
-            ),
-        )
     result = await session.execute(stmt)
-    return list(result.scalars().unique().all())
+    items_out = list(result.scalars().unique().all())
+    return ProductListPage(items=items_out, total=total)
 
 
 @router.get("/export")
