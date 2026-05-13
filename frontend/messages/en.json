@@ -29,6 +29,7 @@
     "empty": "No items",
     "checkoutOk": "Sale #{id}",
     "checkoutErr": "Checkout failed",
+    "productNotInDatabase": "No product with this code exists in the database. Register it in Admin or try another code.",
     "apiInsufficientStock": "Insufficient stock for product {productId}: need {need}, have {have}",
     "priceCheck": "Price check",
     "calc": "Calculator",

@@ -29,6 +29,7 @@
     "empty": "Sin ítems",
     "checkoutOk": "Venta #{id}",
     "checkoutErr": "Error al cobrar",
+    "productNotInDatabase": "No hay ningún producto con este código en la base de datos. Regístrelo en Administración o pruebe otro código.",
     "apiInsufficientStock": "Stock insuficiente para el producto {productId}: se necesitan {need}, hay {have}",
     "priceCheck": "Consulta de precio",
     "calc": "Calculadora",

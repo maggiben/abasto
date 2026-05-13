@@ -159,7 +159,7 @@ export function PosTerminal() {
         `/catalog/products?q=${encodeURIComponent(q)}&limit=15`,
       );
       if (rows.length === 0) {
-        setErr("—");
+        setErr(t("productNotInDatabase"));
         return;
       }
       if (rows.length === 1) {
