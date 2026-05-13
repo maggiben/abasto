@@ -29,3 +29,21 @@ class AnalyticsSummary(BaseModel):
     granularity: str
     totals: AnalyticsTotals
     buckets: list[PeriodBucket]
+
+
+class TopProductRow(BaseModel):
+    product_id: int
+    name: str
+    quantity_sold: Decimal = Field(description="Units sold (POS + web, combined).")
+    revenue: Decimal = Field(description="Line totals summed (POS + web).")
+
+
+class TopCategoryRow(BaseModel):
+    category: str = Field(description="Product category label; '—' if uncategorized.")
+    quantity_sold: Decimal
+    revenue: Decimal
+
+
+class TopSellersOut(BaseModel):
+    products: list[TopProductRow]
+    categories: list[TopCategoryRow]

@@ -12,6 +12,7 @@ from app.schemas.sale import CheckoutRequest, CheckoutResponse
 from app.services.audit_service import record as audit_record
 from app.services.checkout_common import apply_inventory_deduction, prepare_checkout
 from app.services.receipt_printer import try_print_receipt
+from app.services.receipt_printer_config import load_resolved_receipt_layout
 
 router = APIRouter()
 
@@ -82,5 +83,6 @@ async def checkout(
         tax_rate_percent=prepared.rate,
         lines=prepared.receipt_lines,
     )
-    try_print_receipt(settings, response, cashier_email=user.email)
+    receipt_layout = await load_resolved_receipt_layout(session, settings)
+    try_print_receipt(settings, response, cashier_email=user.email, layout=receipt_layout)
     return response

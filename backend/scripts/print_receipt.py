@@ -11,9 +11,20 @@ Requires optional deps: pip install -e ".[printer]"
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import sys
 from pathlib import Path
+
+
+async def _load_layout():
+    from app.config import get_settings
+    from app.db.session import AsyncSessionLocal
+    from app.services.receipt_printer_config import load_resolved_receipt_layout
+
+    settings = get_settings()
+    async with AsyncSessionLocal() as session:
+        return await load_resolved_receipt_layout(session, settings)
 
 
 def main() -> None:
@@ -30,16 +41,23 @@ def main() -> None:
 
     from app.config import get_settings
     from app.schemas.sale import CheckoutResponse
-    from app.services.receipt_printer import try_print_receipt
+    from app.services.receipt_printer import send_receipt_to_printer
+    from app.services.receipt_printer_config import default_resolved_layout
 
     data = json.load(sys.stdin)
     checkout = CheckoutResponse.model_validate(data)
     settings = get_settings()
-    try_print_receipt(
+    try:
+        layout = asyncio.run(_load_layout())
+    except Exception:
+        layout = default_resolved_layout(settings)
+    send_receipt_to_printer(
         settings,
         checkout,
+        layout,
         cashier_email=data.get("_cashier_email"),
         force=args.force,
+        is_test=False,
     )
 
 

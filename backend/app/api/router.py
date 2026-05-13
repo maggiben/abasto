@@ -4,6 +4,7 @@ from app.api.routes import (
     admin_analytics,
     admin_audit,
     admin_inventory,
+    admin_receipt_printer,
     admin_notifications,
     admin_orders,
     admin_products,
@@ -34,3 +35,8 @@ api_router.include_router(admin_audit.router, prefix="/admin/audit-logs", tags=[
 api_router.include_router(admin_analytics.router, prefix="/admin/analytics", tags=["admin-analytics"])
 api_router.include_router(admin_notifications.router, prefix="/admin/notifications", tags=["admin-notifications"])
 api_router.include_router(admin_users.router, prefix="/admin/users", tags=["admin-users"])
+api_router.include_router(
+    admin_receipt_printer.router,
+    prefix="/admin/receipt-printer",
+    tags=["admin-receipt-printer"],
+)

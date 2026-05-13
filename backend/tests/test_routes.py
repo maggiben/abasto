@@ -35,9 +35,12 @@ def test_openapi_includes_auth() -> None:
     assert "/notifications/{notification_id}/read" in paths
     assert "/admin/audit-logs" in paths
     assert "/admin/analytics/summary" in paths
+    assert "/admin/analytics/top-sellers" in paths
     assert "/admin/notifications" in paths
     assert "/admin/inventory/alerts/low-stock" in paths
     assert "/admin/inventory/alerts/expiring" in paths
     assert "/admin/inventory/alerts/notify-low-stock" in paths
     assert "/admin/audit-logs/export" in paths
     assert "/admin/users/{user_id}/promote" in paths
+    assert "/admin/receipt-printer/settings" in paths
+    assert "/admin/receipt-printer/test-print" in paths

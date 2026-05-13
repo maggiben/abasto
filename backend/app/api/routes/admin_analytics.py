@@ -10,10 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_staff_user
 from app.db.session import get_session
 from app.models.enums import CustomerOrderStatus
-from app.models.order import CustomerOrder, Sale
+from app.models.order import CustomerOrder, CustomerOrderLine, Sale, SaleLine
 from app.models.product import InventoryItem, Product
 from app.models.user import User
-from app.schemas.analytics import AnalyticsSummary, AnalyticsTotals, PeriodBucket
+from app.schemas.analytics import (
+    AnalyticsSummary,
+    AnalyticsTotals,
+    PeriodBucket,
+    TopCategoryRow,
+    TopProductRow,
+    TopSellersOut,
+)
 
 router = APIRouter()
 
@@ -148,3 +155,148 @@ async def analytics_summary(
         totals=totals,
         buckets=buckets,
     )
+
+
+def _category_label(raw: str | None) -> str:
+    if raw is None:
+        return "—"
+    s = raw.strip()
+    return s if s else "—"
+
+
+@router.get("/top-sellers", response_model=TopSellersOut)
+async def analytics_top_sellers(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _: Annotated[User, Depends(get_current_staff_user)],
+    range_start: datetime | None = Query(
+        default=None,
+        description="Inclusive range start (UTC). Defaults to 30 days ago.",
+    ),
+    range_end: datetime | None = Query(
+        default=None,
+        description="Exclusive range end (UTC). Defaults to now.",
+    ),
+    limit: int = Query(default=8, ge=1, le=50),
+) -> TopSellersOut:
+    now = datetime.now(timezone.utc)
+    end = range_end or now
+    start = range_start or (end - timedelta(days=30))
+    if end <= start:
+        end = start + timedelta(days=1)
+
+    pos_products = await session.execute(
+        select(
+            SaleLine.product_id,
+            SaleLine.product_name,
+            func.sum(SaleLine.quantity),
+            func.sum(SaleLine.line_total),
+        )
+        .join(Sale, Sale.id == SaleLine.sale_id)
+        .where(Sale.created_at >= start, Sale.created_at < end)
+        .group_by(SaleLine.product_id, SaleLine.product_name),
+    )
+    web_products = await session.execute(
+        select(
+            CustomerOrderLine.product_id,
+            Product.name,
+            func.sum(CustomerOrderLine.quantity),
+            func.sum(CustomerOrderLine.line_total),
+        )
+        .join(CustomerOrder, CustomerOrder.id == CustomerOrderLine.order_id)
+        .join(Product, Product.id == CustomerOrderLine.product_id)
+        .where(
+            CustomerOrder.created_at >= start,
+            CustomerOrder.created_at < end,
+            CustomerOrder.status != CustomerOrderStatus.CANCELLED,
+        )
+        .group_by(CustomerOrderLine.product_id, Product.name),
+    )
+
+    merged_p: dict[int, dict[str, object]] = {}
+    for row in pos_products.all():
+        pid, name, qty, rev = int(row[0]), str(row[1]), Decimal(str(row[2])), Decimal(str(row[3]))
+        merged_p[pid] = {
+            "name": name,
+            "qty": qty,
+            "rev": rev,
+        }
+    for row in web_products.all():
+        pid, name, qty, rev = int(row[0]), str(row[1]), Decimal(str(row[2])), Decimal(str(row[3]))
+        if pid in merged_p:
+            ex = merged_p[pid]
+            ex["qty"] = Decimal(str(ex["qty"])) + qty  # type: ignore[assignment]
+            ex["rev"] = Decimal(str(ex["rev"])) + rev  # type: ignore[assignment]
+            if len(name) > len(str(ex["name"])):
+                ex["name"] = name
+        else:
+            merged_p[pid] = {"name": name, "qty": qty, "rev": rev}
+
+    top_products = sorted(
+        (
+            TopProductRow(
+                product_id=pid,
+                name=str(v["name"]),
+                quantity_sold=Decimal(str(v["qty"])),
+                revenue=Decimal(str(v["rev"])),
+            )
+            for pid, v in merged_p.items()
+        ),
+        key=lambda r: r.revenue,
+        reverse=True,
+    )[:limit]
+
+    pos_cat = await session.execute(
+        select(
+            Product.category,
+            func.sum(SaleLine.quantity),
+            func.sum(SaleLine.line_total),
+        )
+        .select_from(SaleLine)
+        .join(Sale, Sale.id == SaleLine.sale_id)
+        .join(Product, Product.id == SaleLine.product_id)
+        .where(Sale.created_at >= start, Sale.created_at < end)
+        .group_by(Product.category),
+    )
+    web_cat = await session.execute(
+        select(
+            Product.category,
+            func.sum(CustomerOrderLine.quantity),
+            func.sum(CustomerOrderLine.line_total),
+        )
+        .select_from(CustomerOrderLine)
+        .join(CustomerOrder, CustomerOrder.id == CustomerOrderLine.order_id)
+        .join(Product, Product.id == CustomerOrderLine.product_id)
+        .where(
+            CustomerOrder.created_at >= start,
+            CustomerOrder.created_at < end,
+            CustomerOrder.status != CustomerOrderStatus.CANCELLED,
+        )
+        .group_by(Product.category),
+    )
+
+    merged_c: dict[str, dict[str, Decimal]] = defaultdict(
+        lambda: {"qty": Decimal("0"), "rev": Decimal("0")},
+    )
+    for row in pos_cat.all():
+        label = _category_label(row[0])
+        merged_c[label]["qty"] += Decimal(str(row[1]))
+        merged_c[label]["rev"] += Decimal(str(row[2]))
+    for row in web_cat.all():
+        label = _category_label(row[0])
+        merged_c[label]["qty"] += Decimal(str(row[1]))
+        merged_c[label]["rev"] += Decimal(str(row[2]))
+
+    top_categories = sorted(
+        (
+            TopCategoryRow(
+                category=k,
+                quantity_sold=v["qty"],
+                revenue=v["rev"],
+            )
+            for k, v in merged_c.items()
+        ),
+        key=lambda r: r.revenue,
+        reverse=True,
+    )[:limit]
+
+    return TopSellersOut(products=top_products, categories=top_categories)

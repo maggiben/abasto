@@ -5,6 +5,7 @@ from app.models.notification import Notification
 from app.models.order import CustomerOrder, CustomerOrderLine, Sale, SaleLine
 from app.models.product import InventoryItem, Product
 from app.models.user import User
+from app.models.receipt_printer_settings import ReceiptPrinterSettings
 from app.models.vendor_order import VendorOrder, VendorOrderLine
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "InventoryItem",
     "Notification",
     "Product",
+    "ReceiptPrinterSettings",
     "Sale",
     "SaleLine",
     "User",
