@@ -67,6 +67,27 @@ wait_http() {
   done
 }
 
+# Free ports and containers from a prior run so this script can start cleanly (avoids double binds / restarts).
+stop_existing_abasto_services() {
+  echo "# Stopping any previous Abasto services..."
+  (cd "$REPO_ROOT" && docker compose stop) >/dev/null 2>&1 || true
+  if [ -x "$REPO_ROOT/backend/stop.sh" ]; then
+    (cd "$REPO_ROOT/backend" && bash ./stop.sh) >/dev/null 2>&1 || true
+  fi
+  local pids
+  pids="$(lsof -ti :3000 2>/dev/null || true)"
+  if [ -n "${pids}" ]; then
+    echo "# Stopping process(es) on port 3000..."
+    kill ${pids} 2>/dev/null || true
+    sleep 1
+    pids="$(lsof -ti :3000 2>/dev/null || true)"
+    if [ -n "${pids}" ]; then
+      kill -9 ${pids} 2>/dev/null || true
+    fi
+  fi
+  sleep 1
+}
+
 (
 
 cd "$REPO_ROOT" || {
@@ -79,6 +100,8 @@ ensure_node_on_path || {
   echo "100"
   exit 1
 }
+
+stop_existing_abasto_services
 
 echo "# Starting database"
 docker compose up -d postgres || {

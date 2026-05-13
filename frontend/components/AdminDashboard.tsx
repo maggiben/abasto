@@ -2,11 +2,18 @@
 
 import { BarChart } from "@mui/x-charts/BarChart";
 import {
+  Alert,
+  AlertTitle,
   Box,
   Button,
   Card,
   CardContent,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Divider,
   Stack,
   TextField,
@@ -20,7 +27,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { authTokenAtom } from "@/lib/atoms";
 import { formatMoney } from "@/lib/format";
-import type { AnalyticsSummary, Granularity, PresetKey, TopSellersOut } from "@/lib/types";
+import type {
+  AnalyticsSummary,
+  Granularity,
+  PresetKey,
+  ResetSalesOut,
+  TopSellersOut,
+} from "@/lib/types";
 
 function computeWesternEasterLocal(year: number): Date {
   const a = year % 19;
@@ -144,6 +157,10 @@ export function AdminDashboard() {
   const [tops, setTops] = useState<TopSellersOut | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetDialogErr, setResetDialogErr] = useState<string | null>(null);
+  const [resetBanner, setResetBanner] = useState<string | null>(null);
 
   const rangeNow = useMemo(
     () => rangeForPreset(preset, customFrom, customTo, new Date()),
@@ -482,6 +499,39 @@ export function AdminDashboard() {
         </Card>
       </Box>
 
+      <Divider sx={{ my: 1 }} />
+
+      <Box
+        sx={{
+          mt: 2,
+          p: 2,
+          borderRadius: 1,
+          border: "1px solid",
+          borderColor: "divider",
+          bgcolor: "action.hover",
+          maxWidth: 480,
+        }}
+      >
+        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+          {t("resetSectionTitle")}
+        </Typography>
+        {resetBanner ? (
+          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setResetBanner(null)}>
+            {resetBanner}
+          </Alert>
+        ) : null}
+        <Button
+          variant="contained"
+          color="error"
+          onClick={() => {
+            setResetDialogErr(null);
+            setResetDialogOpen(true);
+          }}
+        >
+          {t("resetSalesButton")}
+        </Button>
+      </Box>
+
       <Divider />
       <Typography variant="caption" color="text.secondary">
         {t("footerRange", {
@@ -489,6 +539,68 @@ export function AdminDashboard() {
           end: new Date(summary.range_end).toLocaleString(locale),
         })}
       </Typography>
+
+      <Dialog
+        open={resetDialogOpen}
+        onClose={() => {
+          if (!resetBusy) setResetDialogOpen(false);
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>{t("resetSalesDialogTitle")}</DialogTitle>
+        <DialogContent>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            <AlertTitle>{t("resetSalesDialogAlertTitle")}</AlertTitle>
+            {t("resetSalesDialogAlertBody")}
+          </Alert>
+          <DialogContentText>{t("resetSalesDialogBody")}</DialogContentText>
+          {resetDialogErr ? (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {resetDialogErr}
+            </Alert>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResetDialogOpen(false)} disabled={resetBusy}>
+            {t("resetSalesCancel")}
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={resetBusy}
+            onClick={async () => {
+              if (!token) return;
+              setResetBusy(true);
+              setResetDialogErr(null);
+              try {
+                const out = await apiFetch<ResetSalesOut>("/admin/sales/reset-all", {
+                  method: "POST",
+                  token,
+                });
+                setResetDialogOpen(false);
+                setResetBanner(
+                  t("resetSalesSuccess", {
+                    pos: out.pos_tickets_removed,
+                    web: out.web_orders_removed,
+                  }),
+                );
+                await load();
+              } catch (e) {
+                if (e instanceof ApiError && e.status === 403) {
+                  setResetDialogErr(t("resetSalesDisabled"));
+                } else {
+                  setResetDialogErr(e instanceof ApiError ? e.message : "—");
+                }
+              } finally {
+                setResetBusy(false);
+              }
+            }}
+          >
+            {resetBusy ? t("resetSalesRunning") : t("resetSalesConfirm")}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }

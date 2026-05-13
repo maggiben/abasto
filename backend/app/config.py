@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     app_name: str = "Abasto API"
     debug: bool = False
 
+    # Staff-only POST /admin/sales/reset-all wipes POS tickets and web orders and restores stock.
+    # Keep false in production unless you intentionally accept data loss from the admin UI.
+    allow_reset_sales: bool = Field(default=False, validation_alias=AliasChoices("ALLOW_RESET_SALES", "allow_reset_sales"))
+
     # Stored as CSV so env/docker compose need not use JSON (list[str] is JSON-decoded by
     # pydantic-settings before validators run, which breaks comma-separated CORS_ORIGINS).
     cors_origins_csv: str = Field(

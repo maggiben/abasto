@@ -30,6 +30,7 @@ def test_openapi_includes_auth() -> None:
     assert "/orders/me" in paths
     assert "/admin/orders" in paths
     assert "/admin/sales" in paths
+    assert "/admin/sales/reset-all" in paths
     assert "/admin/vendor-orders" in paths
     assert "/notifications" in paths
     assert "/notifications/{notification_id}/read" in paths

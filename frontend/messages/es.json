@@ -144,7 +144,18 @@
       "revenue": "Ingresos",
       "noRankings": "Sin datos de ventas por línea en este período.",
       "uncategorized": "Sin categoría",
-      "footerRange": "Datos desde {start} hasta {end} (fin exclusivo en servidor)."
+      "footerRange": "Datos desde {start} hasta {end} (fin exclusivo en servidor).",
+      "resetSectionTitle": "Pruebas y datos de demostración",
+      "resetSalesButton": "Reiniciar ventas desde cero",
+      "resetSalesDialogTitle": "Reiniciar todas las ventas",
+      "resetSalesDialogAlertTitle": "Acción irreversible",
+      "resetSalesDialogAlertBody": "Se borrarán todos los tickets del punto de venta y todos los pedidos web. Las cantidades vendidas se devolverán al inventario (como si esas ventas no hubieran ocurrido). No se eliminan productos, usuarios ni pedidos a proveedores.",
+      "resetSalesDialogBody": "Use esto solo después de pruebas o en un entorno de demostración. En producción, perdería el historial de ventas y la trazabilidad real. No hay deshacer.",
+      "resetSalesConfirm": "Sí, reiniciar ventas",
+      "resetSalesCancel": "Cancelar",
+      "resetSalesRunning": "Reiniciando…",
+      "resetSalesSuccess": "Listo: {pos} tickets POS y {web} pedidos web eliminados.",
+      "resetSalesDisabled": "En este servidor la función está desactivada. En el API, defina ALLOW_RESET_SALES=true (por ejemplo en backend/.env) y reinicie el servicio."
     },
     "printer": {
       "title": "Impresora de tickets",

@@ -133,6 +133,11 @@ export type TopSellersOut = {
   categories: TopCategoryRow[];
 };
 
+export type ResetSalesOut = {
+  pos_tickets_removed: number;
+  web_orders_removed: number;
+};
+
 export type ProductCsvImportResult = {
   dry_run: boolean;
   row_count: number;

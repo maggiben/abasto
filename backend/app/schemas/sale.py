@@ -71,3 +71,8 @@ class SaleDetail(BaseModel):
     tax_total: Decimal
     total: Decimal
     lines: list[SaleLineDetail]
+
+
+class ResetSalesOut(BaseModel):
+    pos_tickets_removed: int
+    web_orders_removed: int
