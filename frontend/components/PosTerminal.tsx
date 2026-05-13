@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   IconButton,
+  InputAdornment,
   Snackbar,
   Stack,
   TextField,
@@ -19,7 +20,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useAtom, useSetAtom } from "jotai";
 import { apiFetch, ApiError } from "@/lib/api";
 import { translatePosApiDetail } from "@/lib/posApiErrors";
-import { authTokenAtom, clearAuthAtom } from "@/lib/atoms";
+import { PosAdminSwitchButton } from "@/components/PosAdminSwitchButton";
+import { authTokenAtom, authUserAtom, clearAuthAtom } from "@/lib/atoms";
 import { formatMoney } from "@/lib/format";
 import type { CheckoutResponse, PriceCheckResponse, ProductCatalogItem } from "@/lib/types";
 
@@ -68,6 +70,7 @@ export function PosTerminal() {
     [t],
   );
   const [token] = useAtom(authTokenAtom);
+  const [user] = useAtom(authUserAtom);
   const clearAuth = useSetAtom(clearAuthAtom);
 
   const searchRef = useRef<HTMLInputElement>(null);
@@ -101,6 +104,13 @@ export function PosTerminal() {
   const focusSearch = useCallback(() => {
     searchRef.current?.focus();
     searchRef.current?.select();
+  }, []);
+
+  const clearSearchField = useCallback(() => {
+    setQuery("");
+    setResults([]);
+    setPick(0);
+    searchRef.current?.focus();
   }, []);
 
   const addProduct = useCallback(
@@ -367,6 +377,9 @@ export function PosTerminal() {
             >
               {t("dry")} (F2)
             </Button>
+            {user?.is_staff ? (
+              <PosAdminSwitchButton target="admin" title={t("openAdmin")} sx={{ mr: -0.5 }} />
+            ) : null}
             <Button
               size="small"
               color="inherit"
@@ -390,6 +403,21 @@ export function PosTerminal() {
           placeholder={dry ? t("priceCheck") : t("search")}
           autoComplete="off"
           inputProps={{ "aria-label": "search", spellCheck: false }}
+          InputProps={{
+            endAdornment: query ? (
+              <InputAdornment position="end">
+                <IconButton
+                  aria-label={t("clearSearch")}
+                  edge="end"
+                  size="small"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={clearSearchField}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ) : null,
+          }}
         />
 
         {results.length > 1 && (

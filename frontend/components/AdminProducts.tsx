@@ -2,12 +2,14 @@
 
 import {
   Alert,
+  AlertTitle,
   Box,
   Button,
   Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
   FormControl,
   FormControlLabel,
@@ -42,7 +44,16 @@ import {
 import { esES } from "@mui/x-data-grid/locales";
 import { useLocale, useTranslations } from "next-intl";
 import { useAtom } from "jotai";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { Dispatch, KeyboardEvent, SetStateAction } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { apiFetch, ApiError, getApiBase } from "@/lib/api";
 import { buildAdminProductListSearchParams } from "@/lib/adminProductListQuery";
@@ -82,6 +93,91 @@ const emptyForm: FormValues = {
   is_fractional: false,
 };
 
+type AdminProductsToolbarState = {
+  q: string;
+  includeInactive: boolean;
+  stockHealth: "all" | "low" | "excess";
+};
+
+type AdminProductsToolbarContextValue = {
+  gridToolbar: AdminProductsToolbarState;
+  setGridToolbar: Dispatch<SetStateAction<AdminProductsToolbarState>>;
+  setPaginationModel: Dispatch<SetStateAction<GridPaginationModel>>;
+};
+
+const AdminProductsToolbarContext = createContext<AdminProductsToolbarContextValue | null>(null);
+
+/** Module-level so `slots.toolbar` identity is stable; inner components remount every parent render and break barcode scanners. */
+function AdminProductsDataGridToolbar() {
+  const ctx = useContext(AdminProductsToolbarContext);
+  const t = useTranslations("admin");
+
+  const searchInputProps = useMemo(
+    () => ({
+      spellCheck: false as const,
+      autoComplete: "off" as const,
+      "aria-label": "search",
+      onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => {
+        e.stopPropagation();
+      },
+    }),
+    [],
+  );
+
+  if (!ctx) return null;
+  const { gridToolbar, setGridToolbar, setPaginationModel } = ctx;
+
+  return (
+    <GridToolbarContainer sx={{ flexWrap: "wrap", gap: 1, py: 1, alignItems: "center" }}>
+      <GridToolbarColumnsButton />
+      <GridToolbarFilterButton />
+      <GridToolbarDensitySelector />
+      <TextField
+        label={t("search")}
+        size="small"
+        value={gridToolbar.q}
+        onChange={(e) => {
+          setGridToolbar((g) => ({ ...g, q: e.target.value }));
+          setPaginationModel((p) => ({ ...p, page: 0 }));
+        }}
+        inputProps={searchInputProps}
+        sx={{ minWidth: 200 }}
+      />
+      <FormControlLabel
+        control={
+          <Switch
+            checked={gridToolbar.includeInactive}
+            onChange={(_, checked) => {
+              setGridToolbar((g) => ({ ...g, includeInactive: checked }));
+              setPaginationModel((p) => ({ ...p, page: 0 }));
+            }}
+          />
+        }
+        label={t("showInactive")}
+      />
+      <FormControl size="small" sx={{ minWidth: 220 }}>
+        <InputLabel id="admin-products-stock-health">{t("stockHealthFilter")}</InputLabel>
+        <Select
+          labelId="admin-products-stock-health"
+          label={t("stockHealthFilter")}
+          value={gridToolbar.stockHealth}
+          onChange={(e) => {
+            setGridToolbar((g) => ({
+              ...g,
+              stockHealth: e.target.value as "all" | "low" | "excess",
+            }));
+            setPaginationModel((p) => ({ ...p, page: 0 }));
+          }}
+        >
+          <MenuItem value="all">{t("stockHealthAll")}</MenuItem>
+          <MenuItem value="low">{t("stockHealthLow")}</MenuItem>
+          <MenuItem value="excess">{t("stockHealthExcess")}</MenuItem>
+        </Select>
+      </FormControl>
+    </GridToolbarContainer>
+  );
+}
+
 export function AdminProducts() {
   const t = useTranslations("admin");
   const locale = useLocale();
@@ -117,6 +213,7 @@ export function AdminProducts() {
   const [labelDialog, setLabelDialog] = useState<{ name: string; barcode: string } | null>(null);
   const [labelPrinting, setLabelPrinting] = useState(false);
   const [labelErr, setLabelErr] = useState<string | null>(null);
+  const [removeAllDialogOpen, setRemoveAllDialogOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const importLastProcessedRef = useRef(0);
 
@@ -144,6 +241,15 @@ export function AdminProducts() {
       stockHealth: gridToolbar.stockHealth,
     }),
     [debouncedSearchQ, gridToolbar.includeInactive, gridToolbar.stockHealth],
+  );
+
+  const adminProductsToolbarContextValue = useMemo(
+    (): AdminProductsToolbarContextValue => ({
+      gridToolbar,
+      setGridToolbar,
+      setPaginationModel,
+    }),
+    [gridToolbar, setGridToolbar, setPaginationModel],
   );
 
   const load = useCallback(async () => {
@@ -282,57 +388,6 @@ export function AdminProducts() {
     ],
     [t],
   );
-
-  function ProductsToolbar() {
-    return (
-      <GridToolbarContainer sx={{ flexWrap: "wrap", gap: 1, py: 1, alignItems: "center" }}>
-        <GridToolbarColumnsButton />
-        <GridToolbarFilterButton />
-        <GridToolbarDensitySelector />
-        <TextField
-          label={t("search")}
-          size="small"
-          value={gridToolbar.q}
-          onChange={(e) => {
-            setGridToolbar((g) => ({ ...g, q: e.target.value }));
-            setPaginationModel((p) => ({ ...p, page: 0 }));
-          }}
-          sx={{ minWidth: 200 }}
-        />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={gridToolbar.includeInactive}
-              onChange={(_, checked) => {
-                setGridToolbar((g) => ({ ...g, includeInactive: checked }));
-                setPaginationModel((p) => ({ ...p, page: 0 }));
-              }}
-            />
-          }
-          label={t("showInactive")}
-        />
-        <FormControl size="small" sx={{ minWidth: 220 }}>
-          <InputLabel id="admin-products-stock-health">{t("stockHealthFilter")}</InputLabel>
-          <Select
-            labelId="admin-products-stock-health"
-            label={t("stockHealthFilter")}
-            value={gridToolbar.stockHealth}
-            onChange={(e) => {
-              setGridToolbar((g) => ({
-                ...g,
-                stockHealth: e.target.value as "all" | "low" | "excess",
-              }));
-              setPaginationModel((p) => ({ ...p, page: 0 }));
-            }}
-          >
-            <MenuItem value="all">{t("stockHealthAll")}</MenuItem>
-            <MenuItem value="low">{t("stockHealthLow")}</MenuItem>
-            <MenuItem value="excess">{t("stockHealthExcess")}</MenuItem>
-          </Select>
-        </FormControl>
-      </GridToolbarContainer>
-    );
-  }
 
   function openCreate() {
     setEditing(null);
@@ -494,10 +549,13 @@ export function AdminProducts() {
     }
   }
 
-  async function removeAllProducts() {
+  function openRemoveAllDialog() {
     if (!token || importing || exporting || bulkRemoving) return;
-    const confirmed = window.confirm(t("removeAllWarning"));
-    if (!confirmed) return;
+    setRemoveAllDialogOpen(true);
+  }
+
+  async function confirmRemoveAllProducts() {
+    if (!token || bulkRemoving) return;
     setErr(null);
     setMsg(null);
     setBulkRemoving(true);
@@ -506,6 +564,7 @@ export function AdminProducts() {
         method: "DELETE",
         token,
       });
+      setRemoveAllDialogOpen(false);
       setMsg(t("removeAllResult", { count: String(res.deactivated) }));
       void load();
     } catch (e) {
@@ -549,7 +608,7 @@ export function AdminProducts() {
         <Button
           variant="contained"
           color="error"
-          onClick={() => void removeAllProducts()}
+          onClick={openRemoveAllDialog}
           disabled={importing || exporting || bulkRemoving}
         >
           {bulkRemoving ? t("removingAll") : t("removeAll")}
@@ -587,40 +646,42 @@ export function AdminProducts() {
         </Stack>
       )}
 
-      <Box sx={{ width: "100%", height: 560 }}>
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          getRowId={(r) => r.id}
-          loading={loading}
-          rowCount={rowCount}
-          paginationMode="server"
-          paginationModel={paginationModel}
-          onPaginationModelChange={(m) => setPaginationModel(m)}
-          pageSizeOptions={[25, 50, 100, 200]}
-          sortingMode="server"
-          sortModel={sortModel}
-          onSortModelChange={(m) => {
-            setSortModel(m);
-            setPaginationModel((p) => ({ ...p, page: 0 }));
-          }}
-          filterMode="server"
-          filterModel={filterModel}
-          onFilterModelChange={(m) => {
-            setFilterModel(m);
-            setPaginationModel((p) => ({ ...p, page: 0 }));
-          }}
-          disableRowSelectionOnClick
-          slots={{ toolbar: ProductsToolbar }}
-          localeText={gridLocaleText}
-          sx={{
-            border: 1,
-            borderColor: "divider",
-            borderRadius: 1,
-            "& .MuiDataGrid-cell:focus-within": { outline: "none" },
-          }}
-        />
-      </Box>
+      <AdminProductsToolbarContext.Provider value={adminProductsToolbarContextValue}>
+        <Box sx={{ width: "100%", height: 560 }}>
+          <DataGrid
+            rows={rows}
+            columns={columns}
+            getRowId={(r) => r.id}
+            loading={loading}
+            rowCount={rowCount}
+            paginationMode="server"
+            paginationModel={paginationModel}
+            onPaginationModelChange={(m) => setPaginationModel(m)}
+            pageSizeOptions={[25, 50, 100, 200]}
+            sortingMode="server"
+            sortModel={sortModel}
+            onSortModelChange={(m) => {
+              setSortModel(m);
+              setPaginationModel((p) => ({ ...p, page: 0 }));
+            }}
+            filterMode="server"
+            filterModel={filterModel}
+            onFilterModelChange={(m) => {
+              setFilterModel(m);
+              setPaginationModel((p) => ({ ...p, page: 0 }));
+            }}
+            disableRowSelectionOnClick
+            slots={{ toolbar: AdminProductsDataGridToolbar }}
+            localeText={gridLocaleText}
+            sx={{
+              border: 1,
+              borderColor: "divider",
+              borderRadius: 1,
+              "& .MuiDataGrid-cell:focus-within": { outline: "none" },
+            }}
+          />
+        </Box>
+      </AdminProductsToolbarContext.Provider>
 
       <Menu
         anchorEl={rowMenu?.anchor ?? null}
@@ -680,6 +741,37 @@ export function AdminProducts() {
         cancelLabel={t("cancel")}
         printThermalLabel={t("printThermal")}
       />
+
+      <Dialog
+        open={removeAllDialogOpen}
+        onClose={() => {
+          if (!bulkRemoving) setRemoveAllDialogOpen(false);
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>{t("removeAllDialogTitle")}</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <AlertTitle>{t("removeAllDialogAlertTitle")}</AlertTitle>
+            {t("removeAllDialogAlertBody")}
+          </Alert>
+          <DialogContentText>{t("removeAllDialogBody")}</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRemoveAllDialogOpen(false)} disabled={bulkRemoving}>
+            {t("cancel")}
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => void confirmRemoveAllProducts()}
+            disabled={bulkRemoving}
+          >
+            {bulkRemoving ? t("removingAll") : t("removeAllConfirm")}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{editing ? t("edit") : t("newProduct")}</DialogTitle>

@@ -28,7 +28,15 @@ import {
 import { esES } from "@mui/x-data-grid/locales";
 import { useLocale, useTranslations } from "next-intl";
 import { useAtom } from "jotai";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import type { Dispatch, KeyboardEvent, SetStateAction } from "react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { buildAdminProductListSearchParams } from "@/lib/adminProductListQuery";
 import { authTokenAtom } from "@/lib/atoms";
@@ -41,6 +49,91 @@ function draftFromProduct(p: ProductWithInventory): RowDraft {
     quantity: p.inventory?.quantity ?? "0",
     lowStockThreshold: p.inventory?.low_stock_threshold ?? "",
   };
+}
+
+type AdminInventoryToolbarState = {
+  q: string;
+  includeInactive: boolean;
+  stockHealth: "all" | "low" | "excess";
+};
+
+type AdminInventoryToolbarContextValue = {
+  gridToolbar: AdminInventoryToolbarState;
+  setGridToolbar: Dispatch<SetStateAction<AdminInventoryToolbarState>>;
+  setPaginationModel: Dispatch<SetStateAction<GridPaginationModel>>;
+};
+
+const AdminInventoryToolbarContext = createContext<AdminInventoryToolbarContextValue | null>(null);
+
+/** Module-level so `slots.toolbar` identity is stable; inner components remount every parent render and break barcode scanners. */
+function AdminInventoryDataGridToolbar() {
+  const ctx = useContext(AdminInventoryToolbarContext);
+  const t = useTranslations("admin");
+
+  const searchInputProps = useMemo(
+    () => ({
+      spellCheck: false as const,
+      autoComplete: "off" as const,
+      "aria-label": "search",
+      onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => {
+        e.stopPropagation();
+      },
+    }),
+    [],
+  );
+
+  if (!ctx) return null;
+  const { gridToolbar, setGridToolbar, setPaginationModel } = ctx;
+
+  return (
+    <GridToolbarContainer sx={{ flexWrap: "wrap", gap: 1, py: 1, alignItems: "center" }}>
+      <GridToolbarColumnsButton />
+      <GridToolbarFilterButton />
+      <GridToolbarDensitySelector />
+      <TextField
+        label={t("search")}
+        size="small"
+        value={gridToolbar.q}
+        onChange={(e) => {
+          setGridToolbar((g) => ({ ...g, q: e.target.value }));
+          setPaginationModel((p) => ({ ...p, page: 0 }));
+        }}
+        inputProps={searchInputProps}
+        sx={{ minWidth: 200 }}
+      />
+      <FormControlLabel
+        control={
+          <Switch
+            checked={gridToolbar.includeInactive}
+            onChange={(_, checked) => {
+              setGridToolbar((g) => ({ ...g, includeInactive: checked }));
+              setPaginationModel((p) => ({ ...p, page: 0 }));
+            }}
+          />
+        }
+        label={t("showInactive")}
+      />
+      <FormControl size="small" sx={{ minWidth: 220 }}>
+        <InputLabel id="admin-inv-stock-health">{t("stockHealthFilter")}</InputLabel>
+        <Select
+          labelId="admin-inv-stock-health"
+          label={t("stockHealthFilter")}
+          value={gridToolbar.stockHealth}
+          onChange={(e) => {
+            setGridToolbar((g) => ({
+              ...g,
+              stockHealth: e.target.value as "all" | "low" | "excess",
+            }));
+            setPaginationModel((p) => ({ ...p, page: 0 }));
+          }}
+        >
+          <MenuItem value="all">{t("stockHealthAll")}</MenuItem>
+          <MenuItem value="low">{t("stockHealthLow")}</MenuItem>
+          <MenuItem value="excess">{t("stockHealthExcess")}</MenuItem>
+        </Select>
+      </FormControl>
+    </GridToolbarContainer>
+  );
 }
 
 export function AdminInventory() {
@@ -85,6 +178,15 @@ export function AdminInventory() {
       stockHealth: gridToolbar.stockHealth,
     }),
     [debouncedSearchQ, gridToolbar.includeInactive, gridToolbar.stockHealth],
+  );
+
+  const adminInventoryToolbarContextValue = useMemo(
+    (): AdminInventoryToolbarContextValue => ({
+      gridToolbar,
+      setGridToolbar,
+      setPaginationModel,
+    }),
+    [gridToolbar, setGridToolbar, setPaginationModel],
   );
 
   const load = useCallback(async () => {
@@ -264,57 +366,6 @@ export function AdminInventory() {
     [t, drafts, savingId, saveRow],
   );
 
-  function InventoryToolbar() {
-    return (
-      <GridToolbarContainer sx={{ flexWrap: "wrap", gap: 1, py: 1, alignItems: "center" }}>
-        <GridToolbarColumnsButton />
-        <GridToolbarFilterButton />
-        <GridToolbarDensitySelector />
-        <TextField
-          label={t("search")}
-          size="small"
-          value={gridToolbar.q}
-          onChange={(e) => {
-            setGridToolbar((g) => ({ ...g, q: e.target.value }));
-            setPaginationModel((p) => ({ ...p, page: 0 }));
-          }}
-          sx={{ minWidth: 200 }}
-        />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={gridToolbar.includeInactive}
-              onChange={(_, checked) => {
-                setGridToolbar((g) => ({ ...g, includeInactive: checked }));
-                setPaginationModel((p) => ({ ...p, page: 0 }));
-              }}
-            />
-          }
-          label={t("showInactive")}
-        />
-        <FormControl size="small" sx={{ minWidth: 220 }}>
-          <InputLabel id="admin-inv-stock-health">{t("stockHealthFilter")}</InputLabel>
-          <Select
-            labelId="admin-inv-stock-health"
-            label={t("stockHealthFilter")}
-            value={gridToolbar.stockHealth}
-            onChange={(e) => {
-              setGridToolbar((g) => ({
-                ...g,
-                stockHealth: e.target.value as "all" | "low" | "excess",
-              }));
-              setPaginationModel((p) => ({ ...p, page: 0 }));
-            }}
-          >
-            <MenuItem value="all">{t("stockHealthAll")}</MenuItem>
-            <MenuItem value="low">{t("stockHealthLow")}</MenuItem>
-            <MenuItem value="excess">{t("stockHealthExcess")}</MenuItem>
-          </Select>
-        </FormControl>
-      </GridToolbarContainer>
-    );
-  }
-
   const gridLocaleText = locale.startsWith("es")
     ? esES.components?.MuiDataGrid?.defaultProps?.localeText
     : undefined;
@@ -336,40 +387,42 @@ export function AdminInventory() {
         </Alert>
       )}
 
-      <Box sx={{ width: "100%", height: 520 }}>
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          getRowId={(r) => r.id}
-          loading={loading}
-          rowCount={rowCount}
-          paginationMode="server"
-          paginationModel={paginationModel}
-          onPaginationModelChange={setPaginationModel}
-          pageSizeOptions={[25, 50, 100, 200]}
-          sortingMode="server"
-          sortModel={sortModel}
-          onSortModelChange={(m) => {
-            setSortModel(m);
-            setPaginationModel((p) => ({ ...p, page: 0 }));
-          }}
-          filterMode="server"
-          filterModel={filterModel}
-          onFilterModelChange={(m) => {
-            setFilterModel(m);
-            setPaginationModel((p) => ({ ...p, page: 0 }));
-          }}
-          disableRowSelectionOnClick
-          slots={{ toolbar: InventoryToolbar }}
-          localeText={gridLocaleText}
-          sx={{
-            border: 1,
-            borderColor: "divider",
-            borderRadius: 1,
-            "& .MuiDataGrid-cell:focus-within": { outline: "none" },
-          }}
-        />
-      </Box>
+      <AdminInventoryToolbarContext.Provider value={adminInventoryToolbarContextValue}>
+        <Box sx={{ width: "100%", height: 520 }}>
+          <DataGrid
+            rows={rows}
+            columns={columns}
+            getRowId={(r) => r.id}
+            loading={loading}
+            rowCount={rowCount}
+            paginationMode="server"
+            paginationModel={paginationModel}
+            onPaginationModelChange={setPaginationModel}
+            pageSizeOptions={[25, 50, 100, 200]}
+            sortingMode="server"
+            sortModel={sortModel}
+            onSortModelChange={(m) => {
+              setSortModel(m);
+              setPaginationModel((p) => ({ ...p, page: 0 }));
+            }}
+            filterMode="server"
+            filterModel={filterModel}
+            onFilterModelChange={(m) => {
+              setFilterModel(m);
+              setPaginationModel((p) => ({ ...p, page: 0 }));
+            }}
+            disableRowSelectionOnClick
+            slots={{ toolbar: AdminInventoryDataGridToolbar }}
+            localeText={gridLocaleText}
+            sx={{
+              border: 1,
+              borderColor: "divider",
+              borderRadius: 1,
+              "& .MuiDataGrid-cell:focus-within": { outline: "none" },
+            }}
+          />
+        </Box>
+      </AdminInventoryToolbarContext.Provider>
     </Stack>
   );
 }

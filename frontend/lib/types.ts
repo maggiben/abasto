@@ -79,15 +79,58 @@ export type CheckoutResponse = {
   }[];
 };
 
+export type Granularity = "day" | "week" | "month" | "year";
+
+export type PresetKey =
+  | "7d"
+  | "30d"
+  | "90d"
+  | "this_month"
+  | "prev_month"
+  | "ytd"
+  | "christmas"
+  | "holy_week"
+  | "custom";
+
+export type AnalyticsTotals = {
+  revenue_pos: string;
+  revenue_web: string;
+  revenue_total: string;
+  pos_sale_count: number;
+  web_order_count: number;
+  inventory_value: string;
+};
+
+export type PeriodBucket = {
+  period_start: string;
+  revenue_pos: string;
+  revenue_web: string;
+};
+
 export type AnalyticsSummary = {
-  totals: {
-    revenue_pos: string;
-    revenue_web: string;
-    revenue_total: string;
-    pos_sale_count: number;
-    web_order_count: number;
-    inventory_value: string;
-  };
+  range_start: string;
+  range_end: string;
+  granularity: "day" | "week" | "month" | "year";
+  totals: AnalyticsTotals;
+  buckets: PeriodBucket[];
+};
+
+export type TopProductRow = {
+  product_id: number;
+  name: string;
+  quantity_sold: string;
+  revenue: string;
+};
+
+export type TopCategoryRow = {
+  category: string;
+  quantity_sold: string;
+  revenue: string;
+};
+
+export type TopSellersOut = {
+  products: TopProductRow[];
+  categories: TopCategoryRow[];
 };
 
 export type ProductCsvImportResult = {
@@ -116,4 +159,19 @@ export type ProductCsvImportStatus = {
 
 export type ProductBulkDeactivateResult = {
   deactivated: number;
+};
+
+export type ReceiptPrinterConfigResolved = {
+  store_name: string;
+  header_text: string;
+  greeting_text: string;
+  footer_text: string;
+  closing_text: string;
+  receipt_locale: "es" | "en";
+  show_subtotal: boolean;
+  show_tax_lines: boolean;
+  include_cashier_on_receipt: boolean;
+  feed_lines_before_cut: number;
+  logo_base64: string | null;
+  logo_max_width: number;
 };

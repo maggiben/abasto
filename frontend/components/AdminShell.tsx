@@ -9,6 +9,7 @@ import {
   Toolbar,
   Typography,
 } from "@mui/material";
+import { PosAdminSwitchButton } from "@/components/PosAdminSwitchButton";
 import { useTranslations } from "next-intl";
 import { useAtom, useSetAtom } from "jotai";
 import { useEffect } from "react";
@@ -18,7 +19,41 @@ import {
   authUserAtom,
   clearAuthAtom,
 } from "@/lib/atoms";
-import { Link, useRouter } from "@/i18n/navigation";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
+
+function adminNavItemActive(pathname: string | null, href: string): boolean {
+  if (!pathname) return false;
+  const path = pathname.replace(/\/$/, "") || "/";
+  const target = href.replace(/\/$/, "") || "/";
+  if (target === "/admin") {
+    return path === "/admin";
+  }
+  return path === target || path.startsWith(`${target}/`);
+}
+
+function AdminNavButton({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      component={Link}
+      href={href}
+      color={active ? "primary" : "inherit"}
+      variant={active ? "contained" : "text"}
+      disableElevation={active}
+      size="small"
+      aria-current={active ? "page" : undefined}
+    >
+      {children}
+    </Button>
+  );
+}
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const t = useTranslations("admin");
@@ -27,6 +62,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [user] = useAtom(authUserAtom);
   const clearAuth = useSetAtom(clearAuthAtom);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!ready) return;
@@ -54,34 +90,32 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <AppBar position="static" color="default" elevation={1}>
-        <Toolbar variant="dense">
+        <Toolbar variant="dense" sx={{ gap: 0.5, flexWrap: "wrap" }}>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             {t("title")}
           </Typography>
-          <Button
-            color="inherit"
-            component={Link}
-            href="/admin"
-            variant="text"
-          >
+          <AdminNavButton href="/admin" active={adminNavItemActive(pathname, "/admin")}>
             {t("navHome")}
-          </Button>
-          <Button
-            color="inherit"
-            component={Link}
+          </AdminNavButton>
+          <AdminNavButton
             href="/admin/products"
-            variant="text"
+            active={adminNavItemActive(pathname, "/admin/products")}
           >
             {t("navProducts")}
-          </Button>
-          <Button
-            color="inherit"
-            component={Link}
+          </AdminNavButton>
+          <AdminNavButton
             href="/admin/inventory"
-            variant="text"
+            active={adminNavItemActive(pathname, "/admin/inventory")}
           >
             {t("navInventory")}
-          </Button>
+          </AdminNavButton>
+          <AdminNavButton
+            href="/admin/printer"
+            active={adminNavItemActive(pathname, "/admin/printer")}
+          >
+            {t("navPrinter")}
+          </AdminNavButton>
+          <PosAdminSwitchButton target="pos" title={t("openPos")} sx={{ ml: 0.5 }} />
           <Button color="inherit" onClick={() => clearAuth()}>
             {t("logout")}
           </Button>
