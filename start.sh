@@ -2,6 +2,49 @@
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
+wait_postgres() {
+  local start=$SECONDS
+  echo "# Waiting for PostgreSQL to accept connections..."
+  while true; do
+    if (
+      cd "$REPO_ROOT" && docker compose exec -T postgres pg_isready -U abasto -d abasto
+    ) >/dev/null 2>&1; then
+      return 0
+    fi
+    if ((SECONDS - start >= 180)); then
+      echo "# ERROR: PostgreSQL not ready after 180s (see: docker compose logs postgres)"
+      return 1
+    fi
+    sleep 2
+  done
+}
+
+# Wait until an HTTP endpoint responds (curl or wget).
+wait_http() {
+  local url=$1 desc=$2 max=${3:-600}
+  local start=$SECONDS
+  echo "# Waiting for $desc..."
+  while true; do
+    if command -v curl >/dev/null 2>&1; then
+      if curl -fsS --connect-timeout 2 --max-time 8 "$url" >/dev/null 2>&1; then
+        return 0
+      fi
+    elif command -v wget >/dev/null 2>&1; then
+      if wget -q --spider --timeout=10 "$url" >/dev/null 2>&1; then
+        return 0
+      fi
+    else
+      echo "# ERROR: need curl or wget to probe $desc"
+      return 1
+    fi
+    if ((SECONDS - start >= max)); then
+      echo "# ERROR: timeout waiting for $desc (${max}s)"
+      return 1
+    fi
+    sleep 2
+  done
+}
+
 (
 
 cd "$REPO_ROOT" || {
@@ -11,16 +54,22 @@ cd "$REPO_ROOT" || {
 }
 
 echo "# Starting database"
-docker compose up -d postgres &
+docker compose up -d postgres || {
+  echo "# ERROR: docker compose up postgres failed"
+  echo "100"
+  exit 1
+}
+wait_postgres || {
+  echo "100"
+  exit 1
+}
 
 echo "10"
-sleep 2
 
 echo "# Starting backend..."
 nohup bash -c "cd \"$REPO_ROOT/backend\" && exec ./start.sh" >>/tmp/abasto-backend.log 2>&1 &
 
-echo "40"
-sleep 5
+echo "25"
 
 echo "# Installing frontend..."
 cd "$REPO_ROOT/frontend" || {
@@ -28,21 +77,38 @@ cd "$REPO_ROOT/frontend" || {
   echo "100"
   exit 1
 }
-npm install >>/tmp/abasto-frontend-install.log 2>&1
+npm install >>/tmp/abasto-frontend-install.log 2>&1 || {
+  echo "# ERROR: npm install failed (see /tmp/abasto-frontend-install.log)"
+  echo "100"
+  exit 1
+}
+
+echo "45"
+echo "# Building frontend..."
+npm run build >>/tmp/abasto-frontend-build.log 2>&1 || {
+  echo "# ERROR: npm run build failed (see /tmp/abasto-frontend-build.log)"
+  echo "100"
+  exit 1
+}
 
 echo "60"
-echo "# Building frontend..."
-npm run build >>/tmp/abasto-frontend-build.log 2>&1
+wait_http "http://127.0.0.1:8000/health" "API (backend finished starting)" 600 || {
+  echo "# ERROR: API did not come up (see /tmp/abasto-backend.log)"
+  echo "100"
+  exit 1
+}
 
-echo "70"
-sleep 5
-
+echo "75"
 echo "# Starting frontend..."
 nohup npm run standalone >>/tmp/abasto-frontend-standalone.log 2>&1 &
 
-echo "90"
-sleep 5
+wait_http "http://127.0.0.1:3000/es" "Next.js standalone" 180 || {
+  echo "# ERROR: frontend did not listen on :3000 (see /tmp/abasto-frontend-standalone.log)"
+  echo "100"
+  exit 1
+}
 
+echo "90"
 echo "# Opening browser..."
 nohup firefox --kiosk http://localhost:3000/es >/dev/null 2>&1 &
 
