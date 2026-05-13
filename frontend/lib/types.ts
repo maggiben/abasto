@@ -136,6 +136,7 @@ export type TopSellersOut = {
 export type ResetSalesOut = {
   pos_tickets_removed: number;
   web_orders_removed: number;
+  inventory_restored: boolean;
 };
 
 export type ProductCsvImportResult = {

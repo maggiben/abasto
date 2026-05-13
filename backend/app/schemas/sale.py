@@ -73,6 +73,13 @@ class SaleDetail(BaseModel):
     lines: list[SaleLineDetail]
 
 
+class ResetSalesIn(BaseModel):
+    """POST /admin/sales/reset-all body."""
+
+    restore_inventory: bool = False
+
+
 class ResetSalesOut(BaseModel):
     pos_tickets_removed: int
     web_orders_removed: int
+    inventory_restored: bool

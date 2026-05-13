@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -13,7 +13,7 @@ from app.models.enums import CustomerOrderStatus
 from app.models.order import CustomerOrder, CustomerOrderLine, Sale, SaleLine
 from app.models.product import InventoryItem
 from app.models.user import User
-from app.schemas.sale import ResetSalesOut, SaleDetail, SaleLineDetail, SaleSummary
+from app.schemas.sale import ResetSalesIn, ResetSalesOut, SaleDetail, SaleLineDetail, SaleSummary
 from app.services.audit_service import record as audit_record
 
 router = APIRouter()
@@ -23,8 +23,9 @@ router = APIRouter()
 async def reset_all_sales(
     session: Annotated[AsyncSession, Depends(get_session)],
     staff: Annotated[User, Depends(get_current_staff_user)],
+    body: Annotated[ResetSalesIn, Body()],
 ) -> ResetSalesOut:
-    """Remove every POS sale and web customer order, restoring stock from deducted lines."""
+    """Remove every POS sale and web customer order; optionally restore deducted stock."""
     settings = get_settings()
     if not settings.allow_reset_sales:
         raise HTTPException(
@@ -38,24 +39,25 @@ async def reset_all_sales(
     pos_count_row = await session.execute(select(func.count()).select_from(Sale))
     pos_removed = int(pos_count_row.scalar_one() or 0)
 
-    sale_lines = await session.execute(select(SaleLine.product_id, SaleLine.quantity))
-    for product_id, qty in sale_lines.all():
-        await _add_quantity_to_inventory(session, int(product_id), Decimal(str(qty)))
-
-    web_lines = await session.execute(
-        select(CustomerOrderLine.product_id, CustomerOrderLine.quantity)
-        .join(CustomerOrder, CustomerOrder.id == CustomerOrderLine.order_id)
-        .where(
-            CustomerOrder.status.in_(
-                (CustomerOrderStatus.PAID, CustomerOrderStatus.FULFILLED),
-            ),
-        ),
-    )
     web_removed_row = await session.execute(select(func.count()).select_from(CustomerOrder))
     web_removed = int(web_removed_row.scalar_one() or 0)
 
-    for product_id, qty in web_lines.all():
-        await _add_quantity_to_inventory(session, int(product_id), Decimal(str(qty)))
+    if body.restore_inventory:
+        sale_lines = await session.execute(select(SaleLine.product_id, SaleLine.quantity))
+        for product_id, qty in sale_lines.all():
+            await _add_quantity_to_inventory(session, int(product_id), Decimal(str(qty)))
+
+        web_lines = await session.execute(
+            select(CustomerOrderLine.product_id, CustomerOrderLine.quantity)
+            .join(CustomerOrder, CustomerOrder.id == CustomerOrderLine.order_id)
+            .where(
+                CustomerOrder.status.in_(
+                    (CustomerOrderStatus.PAID, CustomerOrderStatus.FULFILLED),
+                ),
+            ),
+        )
+        for product_id, qty in web_lines.all():
+            await _add_quantity_to_inventory(session, int(product_id), Decimal(str(qty)))
 
     await session.execute(delete(Sale))
     await session.execute(delete(CustomerOrder))
@@ -66,10 +68,18 @@ async def reset_all_sales(
         action="admin.sales_reset_all",
         entity_type="sales",
         entity_id=None,
-        payload={"pos_tickets_removed": pos_removed, "web_orders_removed": web_removed},
+        payload={
+            "pos_tickets_removed": pos_removed,
+            "web_orders_removed": web_removed,
+            "restore_inventory": body.restore_inventory,
+        },
     )
     await session.commit()
-    return ResetSalesOut(pos_tickets_removed=pos_removed, web_orders_removed=web_removed)
+    return ResetSalesOut(
+        pos_tickets_removed=pos_removed,
+        web_orders_removed=web_removed,
+        inventory_restored=body.restore_inventory,
+    )
 
 
 async def _add_quantity_to_inventory(session: AsyncSession, product_id: int, quantity: Decimal) -> None:

@@ -130,7 +130,13 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Printing runs **inside the API process** on the machine that has the USB cable. It is optional: if disabled or missing hardware, sales still persist; errors are logged only.
 
-### Environment variables (`backend/.env` or `docker-compose.yml` `api.environment`)
+### Other API flags (`backend/.env` / `docker-compose.yml` `api.environment`)
+
+| Variable | Purpose |
+|----------|---------|
+| `ALLOW_RESET_SALES` | `true` enables **Reset sales** in the admin business panel (`POST /admin/sales/reset-all`, staff JWT). Default `false` in [`backend/.env.example`](backend/.env.example); set `true` only for demos or local testing, then restart the API. Compose: `ALLOW_RESET_SALES=true` in a `.env` next to `docker-compose.yml` or export before `docker compose up`. |
+
+### Environment variables — USB printer
 
 | Variable | Purpose |
 |----------|---------|

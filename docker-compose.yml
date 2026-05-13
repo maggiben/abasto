@@ -41,6 +41,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://abasto:abasto@postgres:5432/abasto
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-use-a-long-random-secret}
       DEBUG: "false"
+      # Same as backend/.env.example — set true only for demos / testing the reset-sales button.
+      ALLOW_RESET_SALES: "${ALLOW_RESET_SALES:-false}"
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       PRINTER_ENABLED: "true"
       PRINTER_USB_VENDOR: "0x0483"

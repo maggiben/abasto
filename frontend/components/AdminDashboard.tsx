@@ -9,12 +9,14 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
   DialogTitle,
   Divider,
+  FormControlLabel,
   Stack,
   TextField,
   ToggleButton,
@@ -161,6 +163,7 @@ export function AdminDashboard() {
   const [resetBusy, setResetBusy] = useState(false);
   const [resetDialogErr, setResetDialogErr] = useState<string | null>(null);
   const [resetBanner, setResetBanner] = useState<string | null>(null);
+  const [restoreInventoryOnReset, setRestoreInventoryOnReset] = useState(false);
 
   const rangeNow = useMemo(
     () => rangeForPreset(preset, customFrom, customTo, new Date()),
@@ -499,11 +502,11 @@ export function AdminDashboard() {
         </Card>
       </Box>
 
+
       <Divider sx={{ my: 1 }} />
 
       <Box
         sx={{
-          mt: 2,
           p: 2,
           borderRadius: 1,
           border: "1px solid",
@@ -525,6 +528,7 @@ export function AdminDashboard() {
           color="error"
           onClick={() => {
             setResetDialogErr(null);
+            setRestoreInventoryOnReset(false);
             setResetDialogOpen(true);
           }}
         >
@@ -554,7 +558,25 @@ export function AdminDashboard() {
             <AlertTitle>{t("resetSalesDialogAlertTitle")}</AlertTitle>
             {t("resetSalesDialogAlertBody")}
           </Alert>
-          <DialogContentText>{t("resetSalesDialogBody")}</DialogContentText>
+          <DialogContentText sx={{ mb: 1 }}>{t("resetSalesDialogBody")}</DialogContentText>
+          <FormControlLabel
+            sx={{ alignItems: "flex-start", ml: 0, mr: 0 }}
+            control={
+              <Checkbox
+                checked={restoreInventoryOnReset}
+                onChange={(_, checked) => setRestoreInventoryOnReset(checked)}
+                disabled={resetBusy}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2">{t("resetSalesRestoreInventory")}</Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t("resetSalesRestoreInventoryHint")}
+                </Typography>
+              </Box>
+            }
+          />
           {resetDialogErr ? (
             <Alert severity="error" sx={{ mt: 2 }}>
               {resetDialogErr}
@@ -577,13 +599,15 @@ export function AdminDashboard() {
                 const out = await apiFetch<ResetSalesOut>("/admin/sales/reset-all", {
                   method: "POST",
                   token,
+                  body: JSON.stringify({ restore_inventory: restoreInventoryOnReset }),
                 });
                 setResetDialogOpen(false);
+                setRestoreInventoryOnReset(false);
                 setResetBanner(
-                  t("resetSalesSuccess", {
+                  `${t("resetSalesSuccess", {
                     pos: out.pos_tickets_removed,
                     web: out.web_orders_removed,
-                  }),
+                  })} ${out.inventory_restored ? t("resetSalesSuccessInventoryOn") : t("resetSalesSuccessInventoryOff")}`,
                 );
                 await load();
               } catch (e) {

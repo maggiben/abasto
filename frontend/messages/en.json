@@ -149,12 +149,16 @@
       "resetSalesButton": "Reset all sales",
       "resetSalesDialogTitle": "Reset all sales",
       "resetSalesDialogAlertTitle": "Irreversible action",
-      "resetSalesDialogAlertBody": "This deletes every POS ticket and every web order. Quantities sold are returned to inventory (as if those sales never happened). Products, users, and vendor orders are not removed.",
+      "resetSalesDialogAlertBody": "This deletes every POS ticket and every web order. Products, users, and vendor orders are not removed.",
       "resetSalesDialogBody": "Use only after tests or in a demo environment. In production you would lose real sales history and traceability. There is no undo.",
+      "resetSalesRestoreInventory": "Restore inventory (add sold quantities back to stock)",
+      "resetSalesRestoreInventoryHint": "If left unchecked, current stock is unchanged—useful when you want inventory to stay as-is after testing.",
       "resetSalesConfirm": "Yes, reset sales",
       "resetSalesCancel": "Cancel",
       "resetSalesRunning": "Resetting…",
       "resetSalesSuccess": "Done: removed {pos} POS tickets and {web} web orders.",
+      "resetSalesSuccessInventoryOn": "Quantities were added back to inventory.",
+      "resetSalesSuccessInventoryOff": "Inventory was not changed.",
       "resetSalesDisabled": "This action is disabled on this server. Set ALLOW_RESET_SALES=true in the API environment (e.g. backend/.env) and restart the API."
     },
     "printer": {
