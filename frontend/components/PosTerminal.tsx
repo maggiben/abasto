@@ -63,6 +63,9 @@ function stepFor(line: CartLine): number {
   return line.isFractional ? 0.05 : 1;
 }
 
+/** Must stay within `GET /catalog/products` `limit` max (see backend catalog route). */
+const POS_CATALOG_SEARCH_LIMIT = 100;
+
 export function PosTerminal() {
   const t = useTranslations("pos");
   const formatApiErr = useCallback(
@@ -166,7 +169,7 @@ export function PosTerminal() {
     }
     try {
       const rows = await apiFetch<ProductCatalogItem[]>(
-        `/catalog/products?q=${encodeURIComponent(q)}&limit=15`,
+        `/catalog/products?q=${encodeURIComponent(q)}&limit=${POS_CATALOG_SEARCH_LIMIT}`,
       );
       if (rows.length === 0) {
         setErr(t("productNotInDatabase"));

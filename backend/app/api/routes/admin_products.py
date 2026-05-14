@@ -13,7 +13,9 @@ from app.api.deps import get_current_staff_user
 from app.config import get_settings
 from app.db.session import AsyncSessionLocal
 from app.db.session import get_session
+from app.models.order import CustomerOrderLine, SaleLine
 from app.models.product import InventoryItem, Product
+from app.models.vendor_order import VendorOrderLine
 from app.models.user import User
 from app.schemas.csv_import import ProductCsvImportResult, ProductCsvImportStart, ProductCsvImportStatus
 from app.schemas.product import (
@@ -585,6 +587,45 @@ async def deactivate_product(
     await session.commit()
     await session.refresh(p)
     return p
+
+
+@router.delete("/{product_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+async def permanently_delete_product(
+    product_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    staff: Annotated[User, Depends(get_current_staff_user)],
+) -> Response:
+    stmt = select(Product).where(Product.id == product_id)
+    result = await session.execute(stmt)
+    p = result.scalar_one_or_none()
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    if p.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Deactivate the product before permanently deleting it",
+        )
+    for model in (SaleLine, CustomerOrderLine, VendorOrderLine):
+        ref = await session.execute(
+            select(model.id).where(model.product_id == product_id).limit(1),
+        )
+        if ref.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This product is referenced by sales or orders and cannot be permanently deleted",
+            )
+    name_saved = p.name
+    await audit_record(
+        session,
+        actor_user_id=staff.id,
+        action="product.delete_permanent",
+        entity_type="product",
+        entity_id=str(product_id),
+        payload={"name": name_saved},
+    )
+    await session.delete(p)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete("", response_model=dict[str, int])
