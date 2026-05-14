@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, get_current_user_optional
-from app.config import get_settings
 from app.db.session import get_session
 from app.models.enums import CustomerOrderStatus
 from app.models.order import CustomerOrder, CustomerOrderLine
@@ -33,13 +32,8 @@ async def create_customer_order(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="guest_email is required for guest checkout",
         )
-    settings = get_settings()
-    rate = (
-        body.tax_rate_percent
-        if body.tax_rate_percent is not None
-        else settings.default_tax_rate_percent
-    )
-    prepared = await prepare_checkout(session, body.lines, rate)
+    flat = body.tax_rate_percent if body.tax_rate_percent is not None else None
+    prepared = await prepare_checkout(session, body.lines, flat)
 
     order = CustomerOrder(
         user_id=user.id if user else None,

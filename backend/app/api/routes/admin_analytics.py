@@ -66,6 +66,52 @@ async def analytics_summary(
     )
     revenue_web = Decimal(str(revenue_web_row.scalar_one()))
 
+    sub_pos_row = await session.execute(
+        select(func.coalesce(func.sum(Sale.subtotal), 0)).where(
+            Sale.created_at >= start,
+            Sale.created_at < end,
+        ),
+    )
+    sub_pos = Decimal(str(sub_pos_row.scalar_one()))
+
+    sub_web_row = await session.execute(
+        select(func.coalesce(func.sum(CustomerOrder.subtotal), 0)).where(
+            CustomerOrder.created_at >= start,
+            CustomerOrder.created_at < end,
+            CustomerOrder.status != CustomerOrderStatus.CANCELLED,
+        ),
+    )
+    sub_web = Decimal(str(sub_web_row.scalar_one()))
+
+    cogs_pos_row = await session.execute(
+        select(func.coalesce(func.sum(SaleLine.quantity * func.coalesce(Product.cost, 0)), 0))
+        .select_from(SaleLine)
+        .join(Sale, Sale.id == SaleLine.sale_id)
+        .join(Product, Product.id == SaleLine.product_id)
+        .where(Sale.created_at >= start, Sale.created_at < end),
+    )
+    cogs_pos = Decimal(str(cogs_pos_row.scalar_one()))
+
+    cogs_web_row = await session.execute(
+        select(
+            func.coalesce(
+                func.sum(CustomerOrderLine.quantity * func.coalesce(Product.cost, 0)),
+                0,
+            ),
+        )
+        .select_from(CustomerOrderLine)
+        .join(CustomerOrder, CustomerOrder.id == CustomerOrderLine.order_id)
+        .join(Product, Product.id == CustomerOrderLine.product_id)
+        .where(
+            CustomerOrder.created_at >= start,
+            CustomerOrder.created_at < end,
+            CustomerOrder.status != CustomerOrderStatus.CANCELLED,
+        ),
+    )
+    cogs_web = Decimal(str(cogs_web_row.scalar_one()))
+
+    gross_profit = (sub_pos + sub_web - cogs_pos - cogs_web).quantize(Decimal("0.0001"))
+
     pos_count_row = await session.execute(
         select(func.count(Sale.id)).where(
             Sale.created_at >= start,
@@ -146,6 +192,7 @@ async def analytics_summary(
         pos_sale_count=pos_count,
         web_order_count=web_count,
         inventory_value=inventory_value,
+        gross_profit=gross_profit,
     )
 
     return AnalyticsSummary(

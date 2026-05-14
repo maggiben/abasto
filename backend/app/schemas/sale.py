@@ -20,7 +20,7 @@ class CheckoutRequest(BaseModel):
         default=None,
         ge=0,
         le=100,
-        description="Sales tax rate; defaults to server default_tax_rate_percent.",
+        description="If set, applies this % to the whole subtotal. If omitted, tax is computed per line from each product's tax_rate_percent.",
     )
 
 

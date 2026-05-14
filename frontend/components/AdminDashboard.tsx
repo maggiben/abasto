@@ -361,7 +361,7 @@ export function AdminDashboard() {
           gridTemplateColumns: {
             xs: "1fr",
             sm: "repeat(2, 1fr)",
-            md: "repeat(4, 1fr)",
+            md: "repeat(auto-fill, minmax(200px, 1fr))",
           },
         }}
       >
@@ -403,6 +403,17 @@ export function AdminDashboard() {
             <Typography variant="h6">{formatMoney(aov)}</Typography>
             <Typography variant="body2" color="text.secondary">
               {ta("inventoryValue")}: {formatMoney(totals.inventory_value)}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="caption" color="text.secondary">
+              {t("kpiGrossProfit")}
+            </Typography>
+            <Typography variant="h6">{formatMoney(totals.gross_profit)}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t("kpiGrossProfitHint")}
             </Typography>
           </CardContent>
         </Card>

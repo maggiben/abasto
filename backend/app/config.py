@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
 
-    # Applied when checkout request does not override tax_rate_percent (e.g. 10 means 10%).
+    # Legacy: no longer used by checkout when tax_rate_percent is omitted (tax comes from each product).
     default_tax_rate_percent: Decimal = Decimal("0")
 
     # USB thermal receipt printer (runs on same host as the API, e.g. Raspberry Pi).

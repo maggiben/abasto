@@ -51,6 +51,7 @@ type CartLine = {
   name: string;
   quantity: string;
   unitPrice: string;
+  taxRatePercent: string;
   isFractional: boolean;
 };
 
@@ -97,11 +98,23 @@ export function PosTerminal() {
   }, [lines, sel]);
 
   const totals = useMemo(() => {
+    const taxEnvRaw = (process.env.NEXT_PUBLIC_POS_TAX_PERCENT ?? "").trim();
+    const useFlatEnv = taxEnvRaw !== "";
+    const flatPct = useFlatEnv ? Number(String(taxEnvRaw).replace(",", ".")) : NaN;
+
     let sub = 0;
+    let tax = 0;
     for (const ln of lines) {
-      sub += parseNum(ln.quantity) * parseNum(ln.unitPrice);
+      const lineAmt = parseNum(ln.quantity) * parseNum(ln.unitPrice);
+      sub += lineAmt;
+      if (!useFlatEnv) {
+        tax += lineAmt * (parseNum(ln.taxRatePercent) / 100);
+      }
     }
-    return { subtotal: sub, tax: process.env.NEXT_PUBLIC_POS_TAX_PERCENT?.trim() ??0, total: sub };
+    if (useFlatEnv && Number.isFinite(flatPct) && flatPct >= 0) {
+      tax = sub * (flatPct / 100);
+    }
+    return { subtotal: sub, tax, total: sub + tax };
   }, [lines]);
 
   const focusSearch = useCallback(() => {
@@ -137,6 +150,7 @@ export function PosTerminal() {
             name: p.name,
             quantity: qty,
             unitPrice: up,
+            taxRatePercent: String(p.tax_rate_percent ?? "0"),
             isFractional: p.is_fractional,
           },
         ];
@@ -189,7 +203,7 @@ export function PosTerminal() {
   const checkout = useCallback(async () => {
     if (!token || linesRef.current.length === 0) return;
     try {
-      const taxEnv = process.env.NEXT_PUBLIC_POS_TAX_PERCENT?.trim() ?? 0;
+      const taxEnvRaw = (process.env.NEXT_PUBLIC_POS_TAX_PERCENT ?? "").trim();
       const payload: Record<string, unknown> = {
         lines: linesRef.current.map((l) => ({
           product_id: l.productId,
@@ -197,8 +211,8 @@ export function PosTerminal() {
           unit_price: l.unitPrice,
         })),
       };
-      if (taxEnv !== undefined && taxEnv !== "") {
-        const p = Number(String(taxEnv).replace(",", "."));
+      if (taxEnvRaw !== "") {
+        const p = Number(String(taxEnvRaw).replace(",", "."));
         if (Number.isFinite(p) && p >= 0) {
           payload.tax_rate_percent = String(p);
         }

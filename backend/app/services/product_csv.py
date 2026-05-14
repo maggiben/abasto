@@ -20,6 +20,7 @@ CSV_COLUMNS = [
     "price",
     "cost",
     "margin_percent",
+    "tax_rate_percent",
     "barcode",
     "weight_grams",
     "expiration_date",
@@ -30,24 +31,8 @@ CSV_COLUMNS = [
     "low_stock_threshold",
 ]
 
-# Semicolon catalog: ean;producto;brand;cat1;cat2;cat3 (legacy / scan.py feeds).
-# Required headers (case-insensitive): ean, producto. Optional: brand, cat1-cat3.
-FULL_REQUIRED_COLUMNS = [
-    "id",
-    "name",
-    "description",
-    "price",
-    "cost",
-    "margin_percent",
-    "barcode",
-    "weight_grams",
-    "expiration_date",
-    "image_url",
-    "is_fractional",
-    "is_active",
-    "quantity",
-    "low_stock_threshold",
-]
+# Headers required for full import. `tax_rate_percent` is optional (defaults to 0 when column absent).
+IMPORT_REQUIRED_COLUMNS = [c for c in CSV_COLUMNS if c != "tax_rate_percent"]
 
 
 def _strip_cell(v: Any) -> str:
@@ -189,6 +174,7 @@ def _parse_catalog_rows(
                 price=Decimal("0"),
                 cost=None,
                 margin_percent=None,
+                tax_rate_percent=Decimal("0"),
                 barcode=ean,
                 weight_grams=None,
                 expiration_date=None,
@@ -215,6 +201,7 @@ class ParsedProductRow:
     price: Decimal
     cost: Decimal | None
     margin_percent: Decimal | None
+    tax_rate_percent: Decimal
     barcode: str | None
     weight_grams: Decimal | None
     expiration_date: date | None
@@ -247,7 +234,7 @@ def parse_import_csv(content: str) -> tuple[list[ParsedProductRow], list[str]]:
         return rows, errors
 
     headers = [_norm_header(h) for h in fieldnames]
-    missing = [c for c in FULL_REQUIRED_COLUMNS if c not in headers]
+    missing = [c for c in IMPORT_REQUIRED_COLUMNS if c not in headers]
     if missing:
         return [], [f"Missing columns: {', '.join(missing)}"]
     # Map canonical column -> actual key from file (normalized)
@@ -290,6 +277,17 @@ def parse_import_csv(content: str) -> tuple[list[ParsedProductRow], list[str]]:
             continue
         if margin is not None and margin > 100:
             errors.append(f"Row {i}: margin_percent must be <= 100")
+            continue
+
+        tax_cell = cell("tax_rate_percent") if "tax_rate_percent" in key_by_col else ""
+        tax = _parse_decimal(tax_cell, i, "tax_rate_percent", ge=Decimal("0"))
+        if isinstance(tax, str):
+            errors.append(tax)
+            continue
+        if tax is None:
+            tax = Decimal("0")
+        if tax > 100:
+            errors.append(f"Row {i}: tax_rate_percent must be <= 100")
             continue
 
         qty = _parse_decimal(cell("quantity"), i, "quantity", required=True, ge=Decimal("0"))
@@ -347,6 +345,7 @@ def parse_import_csv(content: str) -> tuple[list[ParsedProductRow], list[str]]:
                 price=price,
                 cost=cost,
                 margin_percent=margin,
+                tax_rate_percent=tax,
                 barcode=bc,
                 weight_grams=w,
                 expiration_date=exp,
@@ -377,6 +376,7 @@ def row_to_csv_values(p: Product) -> list[str]:
         str(p.price),
         "" if p.cost is None else str(p.cost),
         "" if p.margin_percent is None else str(p.margin_percent),
+        str(p.tax_rate_percent),
         "" if p.barcode is None else p.barcode,
         "" if p.weight_grams is None else str(p.weight_grams),
         "" if p.expiration_date is None else p.expiration_date.isoformat(),

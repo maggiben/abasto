@@ -472,6 +472,7 @@ async def create_product(
         price=body.price,
         cost=body.cost,
         margin_percent=body.margin_percent,
+        tax_rate_percent=body.tax_rate_percent,
         barcode=barcode,
         weight_grams=body.weight_grams,
         expiration_date=body.expiration_date,

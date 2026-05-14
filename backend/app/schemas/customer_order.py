@@ -15,6 +15,7 @@ class CustomerOrderCreate(BaseModel):
         default=None,
         ge=0,
         le=100,
+        description="If set, flat % on subtotal; if omitted, per-line tax from each product's tax_rate_percent.",
     )
 
 

@@ -14,6 +14,7 @@ export type ProductCatalogItem = {
   id: number;
   name: string;
   price: string;
+  tax_rate_percent: string;
   barcode: string | null;
   image_url: string | null;
   is_fractional: boolean;
@@ -24,6 +25,7 @@ export type PriceCheckResponse = {
   product_id: number;
   name: string;
   price: string;
+  tax_rate_percent: string;
   barcode: string | null;
   quantity: string;
   is_fractional: boolean;
@@ -47,6 +49,7 @@ export type ProductWithInventory = {
   price: string;
   cost: string | null;
   margin_percent: string | null;
+  tax_rate_percent: string;
   barcode: string | null;
   weight_grams: string | null;
   expiration_date: string | null;
@@ -99,6 +102,7 @@ export type AnalyticsTotals = {
   pos_sale_count: number;
   web_order_count: number;
   inventory_value: string;
+  gross_profit: string;
 };
 
 export type PeriodBucket = {

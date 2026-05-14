@@ -35,7 +35,7 @@ class LineLike(Protocol):
 async def prepare_checkout(
     session: AsyncSession,
     lines: Sequence[LineLike],
-    tax_rate_percent: Decimal,
+    flat_tax_rate_percent: Decimal | None,
 ) -> PreparedCheckout:
     qty_by_product: defaultdict[int, Decimal] = defaultdict(Decimal)
     for line in lines:
@@ -102,7 +102,21 @@ async def prepare_checkout(
         )
 
     subtotal = subtotal.quantize(Decimal("0.0001"))
-    tax_total = (subtotal * tax_rate_percent / Decimal(100)).quantize(Decimal("0.0001"))
+    if flat_tax_rate_percent is not None:
+        tax_total = (subtotal * flat_tax_rate_percent / Decimal(100)).quantize(Decimal("0.0001"))
+        rate = flat_tax_rate_percent
+    else:
+        tax_total = Decimal("0")
+        for rl in receipt_lines:
+            p = products[rl.product_id]
+            tax_total += (rl.line_total * p.tax_rate_percent / Decimal(100)).quantize(
+                Decimal("0.0001"),
+            )
+        tax_total = tax_total.quantize(Decimal("0.0001"))
+        if subtotal > 0:
+            rate = (tax_total / subtotal * Decimal(100)).quantize(Decimal("0.0001"))
+        else:
+            rate = Decimal("0")
     total = (subtotal + tax_total).quantize(Decimal("0.0001"))
 
     return PreparedCheckout(
@@ -113,7 +127,7 @@ async def prepare_checkout(
         subtotal=subtotal,
         tax_total=tax_total,
         total=total,
-        rate=tax_rate_percent,
+        rate=rate,
     )
 
 

@@ -15,6 +15,13 @@ class AnalyticsTotals(BaseModel):
     inventory_value: Decimal = Field(
         description="Sum of quantity × COALESCE(cost, price) per product.",
     )
+    gross_profit: Decimal = Field(
+        description=(
+            "POS + web sales subtotals (pre-tax) in range, minus sum of "
+            "quantity × COALESCE(product.cost, 0) on each line. Lines with no "
+            "base cost contribute zero COGS."
+        ),
+    )
 
 
 class PeriodBucket(BaseModel):

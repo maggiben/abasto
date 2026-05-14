@@ -92,6 +92,7 @@ async def apply_import_rows(
                 price=r.price,
                 cost=r.cost,
                 margin_percent=r.margin_percent,
+                tax_rate_percent=r.tax_rate_percent,
                 barcode=r.barcode,
                 weight_grams=r.weight_grams,
                 expiration_date=r.expiration_date,
@@ -126,6 +127,7 @@ async def apply_import_rows(
             p.price = r.price
             p.cost = r.cost
             p.margin_percent = r.margin_percent
+            p.tax_rate_percent = r.tax_rate_percent
             p.barcode = r.barcode
             p.weight_grams = r.weight_grams
             p.expiration_date = r.expiration_date

@@ -5,7 +5,7 @@ from app.services.product_csv import CSV_COLUMNS, parse_import_csv, products_to_
 
 def test_parse_roundtrip_minimal() -> None:
     header = ",".join(CSV_COLUMNS)
-    row = "1,Test,,,,,,10.00,,,bc123,,,,false,true,5,"
+    row = "1,Test,,,,,,10.00,,,,bc123,,,,false,true,5,"
     text = header + "\n" + row + "\n"
     rows, errors = parse_import_csv(text)
     assert errors == []
@@ -15,6 +15,7 @@ def test_parse_roundtrip_minimal() -> None:
     assert r.name == "Test"
     assert r.price == Decimal("10")
     assert r.barcode == "bc123"
+    assert r.tax_rate_percent == Decimal("0")
     assert r.quantity == Decimal("5")
     assert r.is_active is True
 

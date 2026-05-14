@@ -20,6 +20,12 @@ class Product(Base):
     price: Mapped[Decimal] = mapped_column(Numeric(14, 4))
     cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 4), nullable=True)
     margin_percent: Mapped[Decimal | None] = mapped_column(Numeric(8, 4), nullable=True)
+    tax_rate_percent: Mapped[Decimal] = mapped_column(
+        Numeric(8, 4),
+        nullable=False,
+        server_default="0",
+        default=Decimal("0"),
+    )
     barcode: Mapped[str | None] = mapped_column(String(128), unique=True, index=True)
     weight_grams: Mapped[Decimal | None] = mapped_column(Numeric(14, 4), nullable=True)
     expiration_date: Mapped[date | None] = mapped_column(Date, nullable=True)

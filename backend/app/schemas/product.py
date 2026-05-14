@@ -16,6 +16,12 @@ class ProductBase(BaseModel):
     price: Decimal = Field(ge=0)
     cost: Decimal | None = Field(default=None, ge=0)
     margin_percent: Decimal | None = Field(default=None, ge=0, le=100)
+    tax_rate_percent: Decimal = Field(
+        default=Decimal("0"),
+        ge=0,
+        le=100,
+        description="IVA / sales tax % for this SKU (e.g. 21, 10.5). 0 = none or not configured yet.",
+    )
     barcode: str | None = Field(default=None, max_length=128)
     weight_grams: Decimal | None = Field(default=None, ge=0)
     expiration_date: date | None = None
@@ -53,6 +59,7 @@ class ProductUpdate(BaseModel):
     price: Decimal | None = Field(default=None, ge=0)
     cost: Decimal | None = Field(default=None, ge=0)
     margin_percent: Decimal | None = Field(default=None, ge=0, le=100)
+    tax_rate_percent: Decimal | None = Field(default=None, ge=0, le=100)
     barcode: str | None = Field(default=None, max_length=128)
     weight_grams: Decimal | None = Field(default=None, ge=0)
     expiration_date: date | None = None
@@ -105,6 +112,10 @@ class ProductCatalogItem(BaseModel):
     id: int
     name: str
     price: Decimal
+    tax_rate_percent: Decimal = Field(
+        default=Decimal("0"),
+        description="Tax % for checkout when no global override is sent (0 = none).",
+    )
     barcode: str | None
     image_url: str | None
     is_fractional: bool
@@ -117,6 +128,7 @@ class PriceCheckResponse(BaseModel):
     product_id: int
     name: str
     price: Decimal
+    tax_rate_percent: Decimal = Decimal("0")
     barcode: str | None
     quantity: Decimal
     is_fractional: bool

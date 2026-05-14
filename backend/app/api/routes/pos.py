@@ -23,13 +23,8 @@ async def checkout(
     session: Annotated[AsyncSession, Depends(get_session)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> CheckoutResponse:
-    settings = get_settings()
-    rate = (
-        body.tax_rate_percent
-        if body.tax_rate_percent is not None
-        else settings.default_tax_rate_percent
-    )
-    prepared = await prepare_checkout(session, body.lines, rate)
+    flat = body.tax_rate_percent if body.tax_rate_percent is not None else None
+    prepared = await prepare_checkout(session, body.lines, flat)
 
     sale = Sale(
         cashier_user_id=user.id,
@@ -74,6 +69,7 @@ async def checkout(
     await session.commit()
     await session.refresh(sale)
 
+    settings = get_settings()
     response = CheckoutResponse(
         sale_id=sale.id,
         created_at=sale.created_at,

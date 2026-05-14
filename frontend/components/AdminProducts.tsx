@@ -79,6 +79,7 @@ type FormValues = {
   category_detail: string;
   price: string;
   cost: string;
+  tax_rate_percent: string;
   barcode: string;
   is_fractional: boolean;
 };
@@ -91,6 +92,7 @@ const emptyForm: FormValues = {
   category_detail: "",
   price: "",
   cost: "",
+  tax_rate_percent: "0",
   barcode: "",
   is_fractional: false,
 };
@@ -351,6 +353,16 @@ export function AdminProducts() {
         renderCell: (params) => formatMoney(params.row.price),
       },
       {
+        field: "tax_rate_percent",
+        headerName: t("taxRatePercent"),
+        type: "number",
+        width: 88,
+        align: "right",
+        headerAlign: "right",
+        valueGetter: (_v, row) => Number(row.tax_rate_percent),
+        renderCell: (params) => `${params.row.tax_rate_percent}%`,
+      },
+      {
         field: "stock",
         headerName: t("stock"),
         type: "number",
@@ -407,6 +419,7 @@ export function AdminProducts() {
       category_detail: p.category_detail ?? "",
       price: String(p.price),
       cost: p.cost ? String(p.cost) : "",
+      tax_rate_percent: String(p.tax_rate_percent ?? "0"),
       barcode: p.barcode ?? "",
       is_fractional: p.is_fractional,
     });
@@ -452,6 +465,7 @@ export function AdminProducts() {
         category_detail: values.category_detail.trim() || null,
         price: values.price,
         cost: values.cost.trim() || null,
+        tax_rate_percent: values.tax_rate_percent.trim() || "0",
         barcode: values.barcode.trim() || null,
         is_fractional: values.is_fractional,
       };
@@ -846,6 +860,11 @@ export function AdminProducts() {
               <TextField label={t("categoryDetail")} {...register("category_detail")} />
               <TextField label={t("price")} required {...register("price", { required: true })} />
               <TextField label={t("cost")} {...register("cost")} />
+              <TextField
+                label={t("taxRatePercent")}
+                helperText={t("taxRatePercentHint")}
+                {...register("tax_rate_percent")}
+              />
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ xs: "stretch", sm: "flex-start" }}>
                 <TextField
                   label={t("barcode")}

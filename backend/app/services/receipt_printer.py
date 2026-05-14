@@ -26,8 +26,8 @@ _LABELS: dict[str, dict[str, str]] = {
         "test_title": "PRUEBA DE IMPRESION",
         "test_sub": "Ticket de prueba",
         "subtotal": "Subtotal",
-        "tax": "Impuestos",
-        "tax_with_rate": "Impuestos ({rate}%)",
+        "tax": "IVA",
+        "tax_with_rate": "IVA ({rate}%)",
         "total": "TOTAL",
     },
     "en": {
