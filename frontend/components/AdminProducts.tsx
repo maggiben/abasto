@@ -26,6 +26,8 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditIcon from "@mui/icons-material/Edit";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -485,6 +487,35 @@ export function AdminProducts() {
     }
   }
 
+  async function activate(p: ProductWithInventory) {
+    if (!token) return;
+    setErr(null);
+    try {
+      await apiFetch(`/admin/products/${p.id}`, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({ is_active: true }),
+      });
+      setMsg(t("productActivated"));
+      void load();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "—");
+    }
+  }
+
+  async function permanentlyDelete(p: ProductWithInventory) {
+    if (!token) return;
+    if (!window.confirm(t("deletePermanentConfirm", { name: p.name }))) return;
+    setErr(null);
+    try {
+      await apiFetch<void>(`/admin/products/${p.id}/permanent`, { method: "DELETE", token });
+      setMsg(t("productDeletedPermanent"));
+      void load();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "—");
+    }
+  }
+
   async function exportCsv() {
     if (!token || exporting || importing) return;
     setErr(null);
@@ -715,18 +746,48 @@ export function AdminProducts() {
           </ListItemIcon>
           <ListItemText>{t("edit")}</ListItemText>
         </MenuItem>
-        <MenuItem
-          onClick={() => {
-            const r = rowMenu?.row;
-            setRowMenu(null);
-            if (r) void deactivate(r);
-          }}
-        >
-          <ListItemIcon>
-            <DeleteOutlineIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>{t("deactivate")}</ListItemText>
-        </MenuItem>
+        {rowMenu?.row == null ? null : rowMenu.row.is_active ? (
+          <MenuItem
+            onClick={() => {
+              const r = rowMenu.row;
+              setRowMenu(null);
+              void deactivate(r);
+            }}
+          >
+            <ListItemIcon>
+              <DeleteOutlineIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t("deactivate")}</ListItemText>
+          </MenuItem>
+        ) : (
+          <>
+            <MenuItem
+              onClick={() => {
+                const r = rowMenu.row;
+                setRowMenu(null);
+                void activate(r);
+              }}
+            >
+              <ListItemIcon>
+                <CheckCircleOutlineIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{t("activate")}</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                const r = rowMenu.row;
+                setRowMenu(null);
+                void permanentlyDelete(r);
+              }}
+              sx={{ color: "error.main" }}
+            >
+              <ListItemIcon>
+                <DeleteForeverIcon fontSize="small" sx={{ color: "error.main" }} />
+              </ListItemIcon>
+              <ListItemText>{t("deletePermanently")}</ListItemText>
+            </MenuItem>
+          </>
+        )}
       </Menu>
 
       <ProductLabelDialog
