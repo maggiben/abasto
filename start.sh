@@ -159,10 +159,28 @@ wait_http "http://127.0.0.1:3000/es" "Next.js standalone" 180 || {
 }
 
 echo "90"
-echo "# Opening browser..."
-nohup firefox --kiosk http://localhost:3000/es >/dev/null 2>&1 &
+echo "# Opening browser (dedicated profile; closing this window stops API, web, and compose)..."
+FF_PROFILE_DIR="${TMPDIR:-/tmp}/abasto-kiosk-profile-$$"
+mkdir -p "$FF_PROFILE_DIR"
+# --no-remote + dedicated profile so this is not handed off to an already-running Firefox
+# (otherwise $! exits immediately and we cannot wait on the real window).
+firefox --no-remote -profile "$FF_PROFILE_DIR" --kiosk "http://localhost:3000/es" >>/tmp/abasto-firefox.log 2>&1 &
+FIREFOX_PID=$!
 
 echo "100"
+# Zenity may close the pipe here; avoid further stdout writes (SIGPIPE). Use stderr for logs.
+sleep 2
+if ! kill -0 "$FIREFOX_PID" 2>/dev/null; then
+  echo "# WARNING: Firefox parent exited quickly (often: already-running Firefox took the URL). API and web keep running; the next ./start.sh clears old listeners first, or stop ports 3000/8000 and docker compose yourself." >&2
+  rm -rf "$FF_PROFILE_DIR" 2>/dev/null || true
+else
+  trap 'echo "# Interrupted; stopping Abasto..." >&2; stop_existing_abasto_services; rm -rf "$FF_PROFILE_DIR" 2>/dev/null || true; exit 130' INT TERM
+  wait "$FIREFOX_PID" || true
+  trap - INT TERM
+  echo "# Firefox closed; stopping Abasto services..." >&2
+  stop_existing_abasto_services
+  rm -rf "$FF_PROFILE_DIR" 2>/dev/null || true
+fi
 ) | zenity --progress \
   --title="Starting Abasto" \
   --text="Initializing..." \
