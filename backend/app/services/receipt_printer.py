@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 
 _RECEIPT_WIDTH = 32
 
+# ESC/POS emphasized (bold) mode — printers treat these as non-printing control codes.
+_ESCPOS_BOLD_ON = "\x1b\x45\x01"
+_ESCPOS_BOLD_OFF = "\x1b\x45\x00"
+
 _LABELS: dict[str, dict[str, str]] = {
     "es": {
         "sale": "Venta",
@@ -75,7 +79,7 @@ def build_receipt_text(
     layout: "ReceiptPrinterConfigResolved",
     is_test: bool = False,
 ) -> str:
-    """Plain-text receipt body (ASCII-safe lines for thermal compatibility)."""
+    """Receipt body as lines for thermal printers (mostly ASCII; total line may include ESC/POS bold)."""
     ts = checkout.created_at
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
@@ -125,7 +129,10 @@ def build_receipt_text(
         tax_label = _label(tax_key, loc).format(rate=rate_s) if tax_key == "tax_with_rate" else _label("tax", loc)
         lines_out.append(f"{_ascii_safe(tax_label)[:20]:<20}{_money(checkout.tax_total)}")
 
-    lines_out.append(f"{_label('total', loc):<20}{_money(checkout.total)}")
+    total_lbl = _label("total", loc)
+    lines_out.append(
+        f"{_ESCPOS_BOLD_ON}{total_lbl:<20}{_ESCPOS_BOLD_OFF}{_money(checkout.total)}"
+    )
     lines_out.append("-" * _RECEIPT_WIDTH)
 
     if layout.include_cashier_on_receipt and cashier_email:
