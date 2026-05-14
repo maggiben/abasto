@@ -1,8 +1,9 @@
 "use client";
 
+import { AbastoLogo } from "@/components/AbastoLogo";
 import { Alert, Box, Button, Stack, TextField, Typography } from "@mui/material";
 import { useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { useSearchParams } from "next/navigation";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
@@ -50,32 +51,59 @@ export function LoginForm() {
   });
 
   return (
-    <Box component="form" onSubmit={onSubmit} sx={{ p: 3, maxWidth: 400 }}>
-      <Typography variant="h5" gutterBottom>
-        {t("title")}
-      </Typography>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-      <Stack spacing={2}>
-        <TextField
-          label={t("email")}
-          type="email"
-          autoComplete="username"
-          {...register("email", { required: true })}
-        />
-        <TextField
-          label={t("password")}
-          type="password"
-          autoComplete="current-password"
-          {...register("password", { required: true })}
-        />
-        <Button type="submit" variant="contained" disabled={formState.isSubmitting} fullWidth>
-          {t("submit")}
-        </Button>
-      </Stack>
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxSizing: "border-box",
+        p: 2,
+      }}
+    >
+      <Box
+        component="form"
+        onSubmit={onSubmit}
+        sx={{ width: "100%", maxWidth: 400, p: { xs: 0, sm: 1 } }}
+      >
+        <Box sx={{ textAlign: "center", mb: 2 }}>
+          <Link
+            href="/"
+            style={{
+              textDecoration: "none",
+              color: "inherit",
+              display: "inline-block",
+            }}
+          >
+            <AbastoLogo component="span" />
+          </Link>
+        </Box>
+        <Typography variant="h5" component="h1" gutterBottom align="center">
+          {t("title")}
+        </Typography>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+        <Stack spacing={2}>
+          <TextField
+            label={t("email")}
+            type="email"
+            autoComplete="username"
+            {...register("email", { required: true })}
+          />
+          <TextField
+            label={t("password")}
+            type="password"
+            autoComplete="current-password"
+            {...register("password", { required: true })}
+          />
+          <Button type="submit" variant="contained" disabled={formState.isSubmitting} fullWidth>
+            {t("submit")}
+          </Button>
+        </Stack>
+      </Box>
     </Box>
   );
 }

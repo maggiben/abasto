@@ -435,7 +435,13 @@ export function AdminDashboard() {
                 },
               ]}
               height={320}
-              margin={{ top: 32, right: 16, bottom: 48, left: 56 }}
+              margin={{ top: 16, right: 16, bottom: 56, left: 56 }}
+              slotProps={{
+                legend: {
+                  direction: "row",
+                  position: { vertical: "bottom", horizontal: "middle" },
+                },
+              }}
             />
           )}
         </CardContent>
@@ -469,7 +475,13 @@ export function AdminDashboard() {
                   },
                 ]}
                 height={Math.max(220, productRows.length * 36)}
-                margin={{ top: 8, right: 16, bottom: 32, left: 140 }}
+                margin={{ top: 8, right: 16, bottom: 48, left: 140 }}
+                slotProps={{
+                  legend: {
+                    direction: "row",
+                    position: { vertical: "bottom", horizontal: "middle" },
+                  },
+                }}
               />
             )}
           </CardContent>
@@ -495,7 +507,13 @@ export function AdminDashboard() {
                   },
                 ]}
                 height={Math.max(220, categoryRows.length * 36)}
-                margin={{ top: 8, right: 16, bottom: 32, left: 140 }}
+                margin={{ top: 8, right: 16, bottom: 48, left: 140 }}
+                slotProps={{
+                  legend: {
+                    direction: "row",
+                    position: { vertical: "bottom", horizontal: "middle" },
+                  },
+                }}
               />
             )}
           </CardContent>
