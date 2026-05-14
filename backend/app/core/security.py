@@ -33,8 +33,21 @@ def decode_access_token(token: str) -> dict:
 
 
 def parse_token_email_uid(payload: dict) -> tuple[str, int]:
+    """Return JWT `sub` (email) and `uid` (user pk). Accepts int-like str/float `uid`; rejects bool."""
     sub = payload.get("sub")
-    uid = payload.get("uid")
-    if not isinstance(sub, str) or not isinstance(uid, int):
+    uid_raw = payload.get("uid")
+    if not isinstance(sub, str) or not sub:
+        raise JWTError("Invalid token payload")
+    if isinstance(uid_raw, bool) or uid_raw is None:
+        raise JWTError("Invalid token payload")
+    if isinstance(uid_raw, int):
+        uid = uid_raw
+    elif isinstance(uid_raw, float) and uid_raw.is_integer():
+        uid = int(uid_raw)
+    elif isinstance(uid_raw, str) and uid_raw.isdigit():
+        uid = int(uid_raw)
+    else:
+        raise JWTError("Invalid token payload")
+    if uid < 1:
         raise JWTError("Invalid token payload")
     return sub, uid
