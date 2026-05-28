@@ -2,8 +2,13 @@
 
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   InputAdornment,
   Snackbar,
@@ -23,7 +28,13 @@ import { translatePosApiDetail } from "@/lib/posApiErrors";
 import { PosAdminSwitchButton } from "@/components/PosAdminSwitchButton";
 import { authTokenAtom, authUserAtom, clearAuthAtom } from "@/lib/atoms";
 import { formatMoney } from "@/lib/format";
-import type { CheckoutResponse, PriceCheckResponse, ProductCatalogItem } from "@/lib/types";
+import type {
+  CheckoutResponse,
+  PosChargeAccountResponse,
+  PosCreditClient,
+  PriceCheckResponse,
+  ProductCatalogItem,
+} from "@/lib/types";
 
 const posTheme = createTheme({
   palette: {
@@ -91,6 +102,11 @@ export function PosTerminal() {
   const [calcExpr, setCalcExpr] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [clients, setClients] = useState<PosCreditClient[]>([]);
+  const [selectedClient, setSelectedClient] = useState<PosCreditClient | null>(null);
+  const [clientQuery, setClientQuery] = useState("");
+  const [charging, setCharging] = useState(false);
 
   useLayoutEffect(() => {
     linesRef.current = lines;
@@ -231,6 +247,63 @@ export function PosTerminal() {
     }
   }, [token, t, focusSearch, formatApiErr]);
 
+  const chargeAccount = useCallback(async () => {
+    if (!token || linesRef.current.length === 0) return;
+    if (!selectedClient) {
+      setErr(t("selectClientFirst"));
+      return;
+    }
+    setCharging(true);
+    try {
+      const res = await apiFetch<PosChargeAccountResponse>("/pos/credit-accounts/charge", {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          client_id: selectedClient.id,
+          lines: linesRef.current.map((l) => ({
+            product_id: l.productId,
+            quantity: String(parseNum(l.quantity)),
+          })),
+        }),
+      });
+      setLines([]);
+      setSel(0);
+      setAccountOpen(false);
+      setSelectedClient(null);
+      setClientQuery("");
+      setMsg(
+        t("chargeAccountOk", {
+          total: formatMoney(res.charged_total),
+          name: res.client_name,
+        }),
+      );
+      focusSearch();
+    } catch (e) {
+      setErr(e instanceof ApiError ? formatApiErr(e.message) : t("chargeAccountErr"));
+    } finally {
+      setCharging(false);
+    }
+  }, [token, selectedClient, t, focusSearch, formatApiErr]);
+
+  // Load credit clients for the account picker (debounced search).
+  useEffect(() => {
+    if (!accountOpen || !token) return;
+    const id = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        if (clientQuery.trim()) params.set("q", clientQuery.trim());
+        const rows = await apiFetch<PosCreditClient[]>(
+          `/pos/credit-accounts?${params.toString()}`,
+          { token },
+        );
+        setClients(rows);
+      } catch {
+        setClients([]);
+      }
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [accountOpen, token, clientQuery]);
+
   const removeLine = useCallback((index: number) => {
     setLines((prev) => {
       const next = prev.filter((_, i) => i !== index);
@@ -261,6 +334,11 @@ export function PosTerminal() {
       if (e.key === "F6") {
         e.preventDefault();
         setCalcOpen((c) => !c);
+        return;
+      }
+      if (e.key === "F7") {
+        e.preventDefault();
+        if (linesRef.current.length > 0) setAccountOpen(true);
         return;
       }
       if (e.key === "Escape") {
@@ -536,14 +614,25 @@ export function PosTerminal() {
               {t("total")}: {formatMoney(totals.total)}
             </Typography>
           </Box>
-          <Button
-            variant="contained"
-            size="large"
-            color="success"
-            onClick={() => void checkout()}
-          >
-            {t("pay")} (F4)
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              size="large"
+              color="primary"
+              disabled={lines.length === 0}
+              onClick={() => setAccountOpen(true)}
+            >
+              {t("chargeAccount")} (F7)
+            </Button>
+            <Button
+              variant="contained"
+              size="large"
+              color="success"
+              onClick={() => void checkout()}
+            >
+              {t("pay")} (F4)
+            </Button>
+          </Stack>
         </Stack>
 
         {calcOpen && (
@@ -560,6 +649,60 @@ export function PosTerminal() {
             </Stack>
           </Box>
         )}
+
+        <Dialog
+          open={accountOpen}
+          onClose={() => setAccountOpen(false)}
+          fullWidth
+          maxWidth="sm"
+        >
+          <DialogTitle>{t("chargeAccountTitle")}</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                {t("chargeAccountHint")}
+              </Typography>
+              <Autocomplete<PosCreditClient>
+                options={clients}
+                value={selectedClient}
+                onChange={(_e, v) => setSelectedClient(v)}
+                inputValue={clientQuery}
+                onInputChange={(_e, v) => setClientQuery(v)}
+                getOptionLabel={(o) => o.name}
+                isOptionEqualToValue={(a, b) => a.id === b.id}
+                filterOptions={(x) => x}
+                noOptionsText={t("noCreditClients")}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <Stack>
+                      <span>{option.name}</span>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.phone ? `${option.phone} · ` : ""}
+                        {t("currentDebt")}: {formatMoney(option.total_debt)}
+                      </Typography>
+                    </Stack>
+                  </li>
+                )}
+                renderInput={(params) => (
+                  <TextField {...params} label={t("selectClient")} autoFocus />
+                )}
+              />
+              <Typography variant="h6">
+                {t("subtotal")}: {formatMoney(totals.subtotal)}
+              </Typography>
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setAccountOpen(false)}>{t("cancel")}</Button>
+            <Button
+              variant="contained"
+              disabled={!selectedClient || charging || lines.length === 0}
+              onClick={() => void chargeAccount()}
+            >
+              {t("chargeAccountConfirm")}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Snackbar
           open={!!msg}

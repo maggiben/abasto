@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     admin_analytics,
     admin_audit,
+    admin_credit_accounts,
     admin_inventory,
     admin_receipt_printer,
     admin_notifications,
@@ -30,6 +31,11 @@ api_router.include_router(admin_products.router, prefix="/admin/products", tags=
 api_router.include_router(admin_inventory.router, prefix="/admin/inventory", tags=["admin-inventory"])
 api_router.include_router(admin_orders.router, prefix="/admin/orders", tags=["admin-orders"])
 api_router.include_router(admin_sales.router, prefix="/admin/sales", tags=["admin-sales"])
+api_router.include_router(
+    admin_credit_accounts.router,
+    prefix="/admin/credit-accounts",
+    tags=["admin-credit-accounts"],
+)
 api_router.include_router(admin_vendor_orders.router, prefix="/admin/vendor-orders", tags=["admin-vendor-orders"])
 api_router.include_router(admin_audit.router, prefix="/admin/audit-logs", tags=["admin-audit"])
 api_router.include_router(admin_analytics.router, prefix="/admin/analytics", tags=["admin-analytics"])

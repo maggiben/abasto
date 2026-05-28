@@ -110,6 +110,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             {t("navInventory")}
           </AdminNavButton>
           <AdminNavButton
+            href="/admin/cuentas-corrientes"
+            active={adminNavItemActive(pathname, "/admin/cuentas-corrientes")}
+          >
+            {t("navCreditAccounts")}
+          </AdminNavButton>
+          <AdminNavButton
             href="/admin/printer"
             active={adminNavItemActive(pathname, "/admin/printer")}
           >

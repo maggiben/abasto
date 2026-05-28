@@ -27,11 +27,17 @@ def test_openapi_includes_auth() -> None:
     assert "/admin/products/import" in paths
     assert "/admin/products/print-label" in paths
     assert "/pos/checkout" in paths
+    assert "/pos/credit-accounts" in paths
+    assert "/pos/credit-accounts/charge" in paths
     assert "/orders" in paths
     assert "/orders/me" in paths
     assert "/admin/orders" in paths
     assert "/admin/sales" in paths
     assert "/admin/sales/reset-all" in paths
+    assert "/admin/credit-accounts" in paths
+    assert "/admin/credit-accounts/{client_id}" in paths
+    assert "/admin/credit-accounts/{client_id}/items" in paths
+    assert "/admin/credit-accounts/{client_id}/payments" in paths
     assert "/admin/vendor-orders" in paths
     assert "/notifications" in paths
     assert "/notifications/{notification_id}/read" in paths

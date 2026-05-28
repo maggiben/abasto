@@ -171,6 +171,76 @@ export type ProductBulkDeactivateResult = {
   deactivated: number;
 };
 
+export type PosCreditClient = {
+  id: number;
+  name: string;
+  phone: string | null;
+  total_debt: string;
+};
+
+export type PosChargeAccountResponse = {
+  client_id: number;
+  client_name: string;
+  charged_total: string;
+  item_count: number;
+  new_total_debt: string;
+};
+
+export type CreditClientSummary = {
+  id: number;
+  name: string;
+  phone: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  total_debt: string;
+  unpaid_item_count: number;
+};
+
+export type CreditItemOut = {
+  id: number;
+  product_id: number;
+  product_name: string;
+  barcode: string | null;
+  quantity: string;
+  unit_price: string;
+  line_total: string;
+  note: string | null;
+  created_at: string;
+};
+
+export type CreditSettledItemOut = {
+  id: number;
+  product_id: number;
+  product_name: string;
+  quantity: string;
+  unit_price: string;
+  line_total: string;
+};
+
+export type CreditPaymentOut = {
+  id: number;
+  amount: string;
+  note: string | null;
+  created_by_user_id: number | null;
+  created_at: string;
+  items: CreditSettledItemOut[];
+};
+
+export type CreditClientDetail = {
+  id: number;
+  name: string;
+  phone: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  total_debt: string;
+  items: CreditItemOut[];
+  payments: CreditPaymentOut[];
+};
+
 export type ReceiptPrinterConfigResolved = {
   store_name: string;
   header_text: string;

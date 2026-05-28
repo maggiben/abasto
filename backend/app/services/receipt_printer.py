@@ -33,6 +33,15 @@ _LABELS: dict[str, dict[str, str]] = {
         "tax": "IVA",
         "tax_with_rate": "IVA ({rate}%)",
         "total": "TOTAL",
+        "credit_charge_title": "CUENTA CORRIENTE",
+        "credit_unpaid": "** NO PAGADO **",
+        "credit_client": "Cliente",
+        "credit_this_charge": "Este cargo",
+        "credit_total_debt": "DEUDA TOTAL",
+        "credit_payment_title": "RECIBO DE PAGO",
+        "credit_paid": "PAGADO",
+        "credit_remaining": "Saldo pendiente",
+        "credit_settled": "CUENTA SALDADA",
     },
     "en": {
         "sale": "Sale",
@@ -42,6 +51,15 @@ _LABELS: dict[str, dict[str, str]] = {
         "tax": "Tax",
         "tax_with_rate": "Tax ({rate}%)",
         "total": "TOTAL",
+        "credit_charge_title": "STORE CREDIT",
+        "credit_unpaid": "** UNPAID **",
+        "credit_client": "Client",
+        "credit_this_charge": "This charge",
+        "credit_total_debt": "TOTAL DEBT",
+        "credit_payment_title": "PAYMENT RECEIPT",
+        "credit_paid": "PAID",
+        "credit_remaining": "Balance due",
+        "credit_settled": "ACCOUNT SETTLED",
     },
 }
 
@@ -145,6 +163,110 @@ def build_receipt_text(
     lines_out.append(_center_line(layout.closing_text))
 
     return "\n".join(lines_out)
+
+
+def _fmt_receipt_dt(dt: datetime) -> str:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone().strftime("%Y-%m-%d %H:%M")
+
+
+def _qty_str(q: Decimal) -> str:
+    """Quantity without trailing zeros, never in scientific notation."""
+    return format(q.normalize(), "f")
+
+
+def _receipt_header_lines(layout: "ReceiptPrinterConfigResolved") -> list[str]:
+    out: list[str] = []
+    _emit_wrapped_lines(layout.header_text, out)
+    if layout.header_text.strip():
+        out.append("-" * _RECEIPT_WIDTH)
+    out.append(_center_line(layout.store_name))
+    if layout.greeting_text.strip():
+        out.append(_center_line(layout.greeting_text))
+    return out
+
+
+def _receipt_footer_lines(
+    layout: "ReceiptPrinterConfigResolved", cashier_email: str | None
+) -> list[str]:
+    out: list[str] = []
+    if layout.include_cashier_on_receipt and cashier_email:
+        out.append(_ascii_safe(cashier_email)[:_RECEIPT_WIDTH])
+    _emit_wrapped_lines(layout.footer_text, out)
+    if layout.footer_text.strip():
+        out.append("-" * _RECEIPT_WIDTH)
+    out.append(_center_line(layout.closing_text))
+    return out
+
+
+def _credit_item_lines(items: "list[tuple[str, Decimal, Decimal, Decimal]]") -> list[str]:
+    out: list[str] = []
+    for name, qty, unit, total in items:
+        out.append(_ascii_safe(name)[:24])
+        out.append(f" {_qty_str(qty)} x {_money(unit)} {_money(total)}".rstrip())
+    return out
+
+
+def build_credit_charge_receipt_text(
+    *,
+    layout: "ReceiptPrinterConfigResolved",
+    client_name: str,
+    created_at: datetime,
+    lines: "list[tuple[str, Decimal, Decimal, Decimal]]",
+    charge_total: Decimal,
+    total_debt: Decimal,
+) -> str:
+    """Debt slip printed when a cart is charged to a client's tab (not paid)."""
+    loc = layout.receipt_locale
+    out = _receipt_header_lines(layout)
+    out.append(_center_line(_label("credit_charge_title", loc)))
+    out.append(_center_line(_label("credit_unpaid", loc)))
+    out.append("-" * _RECEIPT_WIDTH)
+    out.append(f"{_label('credit_client', loc)}: {_ascii_safe(client_name)}"[:_RECEIPT_WIDTH])
+    out.append(_fmt_receipt_dt(created_at))
+    out.append("-" * _RECEIPT_WIDTH)
+    out.extend(_credit_item_lines(lines))
+    out.append("-" * _RECEIPT_WIDTH)
+    out.append(f"{_label('credit_this_charge', loc):<20}{_money(charge_total)}")
+    out.append(
+        f"{_ESCPOS_BOLD_ON}{_label('credit_total_debt', loc):<20}{_ESCPOS_BOLD_OFF}{_money(total_debt)}"
+    )
+    out.append("-" * _RECEIPT_WIDTH)
+    out.extend(_receipt_footer_lines(layout, None))
+    return "\n".join(out)
+
+
+def build_credit_payment_receipt_text(
+    *,
+    layout: "ReceiptPrinterConfigResolved",
+    client_name: str,
+    created_at: datetime,
+    lines: "list[tuple[str, Decimal, Decimal, Decimal]]",
+    paid_total: Decimal,
+    remaining_debt: Decimal,
+) -> str:
+    """Receipt printed when a debt is collected. On partial payments it shows the
+    remaining balance as a single figure (it does not list the still-owed items)."""
+    loc = layout.receipt_locale
+    out = _receipt_header_lines(layout)
+    out.append(_center_line(_label("credit_payment_title", loc)))
+    out.append("-" * _RECEIPT_WIDTH)
+    out.append(f"{_label('credit_client', loc)}: {_ascii_safe(client_name)}"[:_RECEIPT_WIDTH])
+    out.append(_fmt_receipt_dt(created_at))
+    out.append("-" * _RECEIPT_WIDTH)
+    out.extend(_credit_item_lines(lines))
+    out.append("-" * _RECEIPT_WIDTH)
+    out.append(
+        f"{_ESCPOS_BOLD_ON}{_label('credit_paid', loc):<20}{_ESCPOS_BOLD_OFF}{_money(paid_total)}"
+    )
+    if remaining_debt > 0:
+        out.append(f"{_label('credit_remaining', loc):<20}{_money(remaining_debt)}")
+    else:
+        out.append(_center_line(_label("credit_settled", loc)))
+    out.append("-" * _RECEIPT_WIDTH)
+    out.extend(_receipt_footer_lines(layout, None))
+    return "\n".join(out)
 
 
 def _wrap_label_lines(name: str, width: int = 32) -> list[str]:
@@ -381,6 +503,64 @@ def sample_test_checkout() -> "CheckoutResponse":
     )
 
 
+def _send_built_text(
+    settings: "Settings",
+    text: str,
+    layout: "ReceiptPrinterConfigResolved",
+    *,
+    force: bool = False,
+    log_id: str = "",
+) -> None:
+    """Send an already-built receipt body to the USB printer. Raises on I/O errors.
+
+    Logo is printed only when ``printer_prefer_escpos`` is True (python-escpos + Pillow).
+    """
+    if not force and not settings.printer_enabled:
+        return
+
+    payload = text.encode("utf-8", errors="replace")
+    vid = settings.printer_usb_vendor
+    pid = settings.printer_usb_product
+    feed = layout.feed_lines_before_cut
+    logo_im = _decode_logo_image(layout.logo_base64) if settings.printer_prefer_escpos else None
+    if layout.logo_base64 and not settings.printer_prefer_escpos:
+        logger.info("Receipt logo skipped: set PRINTER_PREFER_ESCPOS=true for image printing")
+
+    logger.info(
+        "Receipt print starting: id=%s os_user=%s vid=%#06x pid=%#06x "
+        "prefer_escpos=%s profile=%r payload_bytes=%s feed_lines=%s",
+        log_id,
+        getpass.getuser(),
+        vid,
+        pid,
+        settings.printer_prefer_escpos,
+        settings.printer_profile,
+        len(payload),
+        feed,
+    )
+
+    if settings.printer_prefer_escpos:
+        try:
+            _print_escpos_receipt(
+                vid,
+                pid,
+                settings.printer_profile,
+                text,
+                logo_image=logo_im,
+                logo_max_width=layout.logo_max_width,
+                feed_lines_before_cut=feed,
+            )
+            logger.info("Receipt print finished OK (ESC/POS USB) id=%s", log_id)
+            return
+        except ImportError:
+            logger.info("python-escpos not installed; falling back to raw USB print")
+        except Exception:
+            logger.exception("ESC/POS print failed; trying raw USB")
+
+    _print_raw_usb(vid, pid, payload, feed_lines_before_cut=feed)
+    logger.info("Receipt print finished OK (raw USB) id=%s", log_id)
+
+
 def send_receipt_to_printer(
     settings: "Settings",
     checkout: "CheckoutResponse",
@@ -403,48 +583,73 @@ def send_receipt_to_printer(
         layout=layout,
         is_test=is_test,
     )
-    payload = text.encode("utf-8", errors="replace")
-    vid = settings.printer_usb_vendor
-    pid = settings.printer_usb_product
-    feed = layout.feed_lines_before_cut
-    logo_im = _decode_logo_image(layout.logo_base64) if settings.printer_prefer_escpos else None
-    if layout.logo_base64 and not settings.printer_prefer_escpos:
-        logger.info("Receipt logo skipped: set PRINTER_PREFER_ESCPOS=true for image printing")
+    _send_built_text(settings, text, layout, force=force, log_id=f"sale#{checkout.sale_id}")
 
-    logger.info(
-        "Receipt print starting: sale_id=%s test=%s os_user=%s vid=%#06x pid=%#06x "
-        "prefer_escpos=%s profile=%r payload_bytes=%s feed_lines=%s",
-        checkout.sale_id,
-        is_test,
-        getpass.getuser(),
-        vid,
-        pid,
-        settings.printer_prefer_escpos,
-        settings.printer_profile,
-        len(payload),
-        feed,
-    )
 
-    if settings.printer_prefer_escpos:
-        try:
-            _print_escpos_receipt(
-                vid,
-                pid,
-                settings.printer_profile,
-                text,
-                logo_image=logo_im,
-                logo_max_width=layout.logo_max_width,
-                feed_lines_before_cut=feed,
-            )
-            logger.info("Receipt print finished OK (ESC/POS USB) sale_id=%s", checkout.sale_id)
-            return
-        except ImportError:
-            logger.info("python-escpos not installed; falling back to raw USB print")
-        except Exception:
-            logger.exception("ESC/POS print failed; trying raw USB")
+def try_print_credit_charge(
+    settings: "Settings",
+    layout: "ReceiptPrinterConfigResolved | None",
+    *,
+    client_id: int,
+    client_name: str,
+    created_at: datetime,
+    lines: "list[tuple[str, Decimal, Decimal, Decimal]]",
+    charge_total: Decimal,
+    total_debt: Decimal,
+) -> None:
+    """Print a debt slip for a credit-account charge. Never raises — logs errors."""
+    if not settings.printer_enabled:
+        logger.info("Credit charge slip skipped: PRINTER_ENABLED is false (client=%s)", client_id)
+        return
+    if layout is None:
+        from app.services.receipt_printer_config import default_resolved_layout
 
-    _print_raw_usb(vid, pid, payload, feed_lines_before_cut=feed)
-    logger.info("Receipt print finished OK (raw USB) sale_id=%s", checkout.sale_id)
+        layout = default_resolved_layout(settings)
+    try:
+        text = build_credit_charge_receipt_text(
+            layout=layout,
+            client_name=client_name,
+            created_at=created_at,
+            lines=lines,
+            charge_total=charge_total,
+            total_debt=total_debt,
+        )
+        _send_built_text(settings, text, layout, log_id=f"credit-charge:client#{client_id}")
+    except Exception:
+        logger.exception("Credit charge slip print failed (client=%s)", client_id)
+
+
+def try_print_credit_payment(
+    settings: "Settings",
+    layout: "ReceiptPrinterConfigResolved | None",
+    *,
+    client_id: int,
+    client_name: str,
+    created_at: datetime,
+    lines: "list[tuple[str, Decimal, Decimal, Decimal]]",
+    paid_total: Decimal,
+    remaining_debt: Decimal,
+) -> None:
+    """Print a payment receipt for a credit-account collection. Never raises."""
+    if not settings.printer_enabled:
+        logger.info("Credit payment receipt skipped: PRINTER_ENABLED is false (client=%s)", client_id)
+        return
+    if layout is None:
+        from app.services.receipt_printer_config import default_resolved_layout
+
+        layout = default_resolved_layout(settings)
+    try:
+        text = build_credit_payment_receipt_text(
+            layout=layout,
+            client_name=client_name,
+            created_at=created_at,
+            lines=lines,
+            paid_total=paid_total,
+            remaining_debt=remaining_debt,
+        )
+        _send_built_text(settings, text, layout, log_id=f"credit-payment:client#{client_id}")
+    except Exception:
+        logger.exception("Credit payment receipt print failed (client=%s)", client_id)
 
 
 def try_print_receipt(
